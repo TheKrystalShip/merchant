@@ -1,0 +1,231 @@
+using Merchant.Feeds;
+using Merchant.Sources;
+using Discord;
+using Discord.WebSocket;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+
+namespace Merchant.Discord;
+
+/// <summary>
+/// The loop: fetch every subscribed feed, file what is new, and post whatever is due.
+///
+/// Fetching and posting are separated on purpose. Sweeping happens on one interval for everybody;
+/// posting happens on each subscription's own cadence, reading the backlog the sweep filed. That
+/// split is what makes a weekly channel possible without polling weekly and missing the week.
+/// </summary>
+public sealed class Sweeper : BackgroundService
+{
+    /// <summary>How long a posted item stays in the ledger before it is forgotten.</summary>
+    private static readonly TimeSpan Retention = TimeSpan.FromDays(60);
+
+    /// <summary>
+    /// Cadence windows are shaved below their nominal period so a sweep that lands a few minutes
+    /// late does not push a daily post into a permanent slow drift around the clock.
+    /// </summary>
+    private static readonly TimeSpan DailyWindow = TimeSpan.FromHours(23);
+    private static readonly TimeSpan WeeklyWindow = TimeSpan.FromDays(6.9);
+
+    /// <summary>Most items one digest speaks for. A week of a busy feed stays well inside this.</summary>
+    private const int DigestCeiling = 500;
+
+    private readonly DiscordSocketClient _discord;
+    private readonly Store.Store _store;
+    private readonly IHttpClientFactory _http;
+    private readonly BotOptions _options;
+    private readonly ILogger<Sweeper> _log;
+
+    /// <summary>Wires the sweep to the gateway, the ledger and the network.</summary>
+    public Sweeper(
+        DiscordSocketClient discord,
+        Store.Store store,
+        IHttpClientFactory http,
+        BotOptions options,
+        ILogger<Sweeper> log)
+    {
+        _discord = discord;
+        _store = store;
+        _http = http;
+        _options = options;
+        _log = log;
+    }
+
+    /// <inheritdoc />
+    protected override async Task ExecuteAsync(CancellationToken ct)
+    {
+        // Nothing can be posted before the gateway hands over the guild and channel caches.
+        while (!ct.IsCancellationRequested && _discord.ConnectionState != ConnectionState.Connected)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(2), ct);
+        }
+
+        using PeriodicTimer timer = new(_options.SweepInterval);
+
+        do
+        {
+            try
+            {
+                await SweepAsync(ct);
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                // One bad sweep must not end the loop; the next one is a few minutes away.
+                _log.LogError(ex, "Sweep failed.");
+            }
+        }
+        while (await timer.WaitForNextTickAsync(ct));
+    }
+
+    /// <summary>One pass over every subscription. Public so a test or a one-shot run can drive it.</summary>
+    internal async Task SweepAsync(CancellationToken ct)
+    {
+        IReadOnlyList<Subscription> subscriptions = _store.All();
+        if (subscriptions.Count == 0)
+        {
+            return;
+        }
+
+        _log.LogInformation("Sweeping {Count} subscription(s).", subscriptions.Count);
+        HttpClient http = _http.CreateClient(BotOptions.HttpClientName);
+
+        foreach (Subscription subscription in subscriptions)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            try
+            {
+                await SweepOneAsync(subscription, http, ct);
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                _log.LogWarning(ex, "Subscription {Id} ({Category}) failed.",
+                    subscription.Id, subscription.CategoryKey);
+            }
+        }
+
+        int pruned = _store.Prune(Retention);
+        if (pruned > 0)
+        {
+            _log.LogDebug("Pruned {Count} expired ledger row(s).", pruned);
+        }
+    }
+
+    private async Task SweepOneAsync(Subscription subscription, HttpClient http, CancellationToken ct)
+    {
+        Category? category = Catalog.Find(subscription.CategoryKey);
+        if (category is null)
+        {
+            _log.LogWarning("Subscription {Id} names unknown category '{Key}'.",
+                subscription.Id, subscription.CategoryKey);
+            return;
+        }
+
+        GuildSettings settings = _store.Settings(subscription.GuildId);
+        ISource source = Catalog.SourceFor(subscription.CategoryKey, http, settings);
+
+        IReadOnlyList<FeedItem> fetched = await source.FetchAsync(ct);
+        if (fetched.Count == 0)
+        {
+            return;
+        }
+
+        if (_store.IsUnswept(subscription.Id))
+        {
+            // First contact. The backlog is filed silently, but a handful goes out immediately:
+            // a channel that stays empty for a day after setup reads as a bot that does not work.
+            IReadOnlyList<FeedItem> opener = [.. fetched.Take(Announcer.LiveBurst)];
+            _store.Record(subscription.Id, opener, alreadyPosted: false);
+            _store.Record(subscription.Id, fetched.Skip(opener.Count), alreadyPosted: true);
+        }
+        else
+        {
+            int added = _store.Record(subscription.Id, fetched, alreadyPosted: false);
+            if (added > 0)
+            {
+                _log.LogDebug("Subscription {Id}: {Count} new item(s).", subscription.Id, added);
+            }
+        }
+
+        if (IsDue(subscription))
+        {
+            await FlushAsync(subscription, category, ct);
+        }
+    }
+
+    /// <summary>Whether this subscription's channel is owed a post right now.</summary>
+    internal static bool IsDue(Subscription subscription, DateTimeOffset? now = null)
+    {
+        DateTimeOffset moment = now ?? DateTimeOffset.UtcNow;
+
+        return subscription.Cadence switch
+        {
+            Cadence.Live => true,
+            Cadence.Daily => Elapsed(subscription, moment) >= DailyWindow,
+            Cadence.Weekly => Elapsed(subscription, moment) >= WeeklyWindow,
+            _ => false,
+        };
+    }
+
+    /// <summary>Time since the last post; unbounded when the channel has never had one.</summary>
+    private static TimeSpan Elapsed(Subscription subscription, DateTimeOffset now) =>
+        subscription.LastPostedAt is { } last ? now - last : TimeSpan.MaxValue;
+
+    private async Task FlushAsync(Subscription subscription, Category category, CancellationToken ct)
+    {
+        if (_store.PendingCount(subscription.Id) == 0)
+        {
+            return;
+        }
+
+        if (await _discord.GetChannelAsync(subscription.ChannelId) is not IMessageChannel channel)
+        {
+            _log.LogWarning("Subscription {Id} points at channel {Channel}, which merchant cannot see.",
+                subscription.Id, subscription.ChannelId);
+            return;
+        }
+
+        // A live channel drains a few at a time, so the rest must stay pending. A digest speaks for
+        // the whole backlog — it lists the first dozen and counts the remainder — so it takes all
+        // of it and clears all of it.
+        int limit = subscription.Cadence == Cadence.Live ? Announcer.LiveBurst : DigestCeiling;
+        IReadOnlyList<FeedItem> pending = _store.Pending(subscription.Id, limit);
+
+        if (pending.Count == 0)
+        {
+            return;
+        }
+
+        string? mention = subscription.MentionRoleId is { } role ? MentionUtils.MentionRole(role) : null;
+
+        try
+        {
+            if (subscription.Cadence == Cadence.Live)
+            {
+                // Oldest first, so a channel reads in the order things actually happened.
+                foreach (FeedItem item in pending.Reverse())
+                {
+                    await channel.SendMessageAsync(text: mention, embed: Announcer.Item(category, item));
+                    mention = null; // Ping once per burst, not once per deal.
+                }
+            }
+            else
+            {
+                string period = subscription.Cadence == Cadence.Weekly ? "this week" : "today";
+                await channel.SendMessageAsync(
+                    text: mention, embed: Announcer.Digest(category, pending, period));
+            }
+        }
+        catch (global::Discord.Net.HttpException ex)
+        {
+            // Missing Send Messages or Embed Links in that channel is the overwhelmingly common
+            // cause. Leave the backlog unposted so it goes out once the permission is fixed.
+            _log.LogWarning(ex, "Could not post to channel {Channel} for subscription {Id}.",
+                subscription.ChannelId, subscription.Id);
+            return;
+        }
+
+        _store.MarkFlushed(subscription.Id, pending.Select(i => i.Id), DateTimeOffset.UtcNow);
+        _log.LogInformation("Posted {Count} item(s) to {Channel} for {Category}.",
+            pending.Count, subscription.ChannelId, category.Key);
+    }
+}

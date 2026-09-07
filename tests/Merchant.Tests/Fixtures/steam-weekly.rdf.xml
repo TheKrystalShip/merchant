@@ -1,0 +1,159 @@
+<?xml version="1.0" ?><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:sy="http://purl.org/rss/1.0/modules/syndication/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:foaf="http://xmlns.com/foaf/0.1/" xmlns:cc="http://web.resource.org/cc/" xmlns="http://purl.org/rss/1.0/">
+	<channel rdf:about="http://www.steampowered.com">
+		<title>Steam Weekly Top Sellers</title> 
+		<link>https://store.steampowered.com/charts</link>
+		<description>The top ten products on Steam by revenue for the week, updated every Tuesday. Check out https://store.steampowered.com/charts for a listing of the top 100 sellers of the week as well as top played charts and more.</description>
+		<language>en</language> 
+		<pubDate>Tue, 01 Sep 2026 07:00:00 +0700</pubDate>
+		<generator>http://www.steampowered.com/</generator> 
+		<rdf:Seq>
+					<rdf:li rdf:resource="https://store.steampowered.com/app/2075800/STAR_WARS_Zero_Company?t=1788220800" />
+					<rdf:li rdf:resource="https://store.steampowered.com/app/730/CounterStrike_2?t=1788220800" />
+					<rdf:li rdf:resource="https://store.steampowered.com/app/4001890/How_to_Fish?t=1788220800" />
+					<rdf:li rdf:resource="https://store.steampowered.com/app/570/Dota_2?t=1788220800" />
+					<rdf:li rdf:resource="https://store.steampowered.com/app/1172470/Apex_Legends?t=1788220800" />
+					<rdf:li rdf:resource="https://store.steampowered.com/app/4356430/NBA_2K27?t=1788220800" />
+					<rdf:li rdf:resource="https://store.steampowered.com/app/3321460/Crimson_Desert_Enhanced?t=1788220800" />
+					<rdf:li rdf:resource="https://store.steampowered.com/app/381210/Dead_by_Daylight?t=1788220800" />
+					<rdf:li rdf:resource="https://store.steampowered.com/app/4080220/EA_SPORTS_FC_27?t=1788220800" />
+					<rdf:li rdf:resource="https://store.steampowered.com/app/1867240/WARDOGS?t=1788220800" />
+				</rdf:Seq>
+	</channel>
+			<item rdf:about="https://store.steampowered.com/app/2075800/STAR_WARS_Zero_Company?t=1788220800">
+		<title><![CDATA[#1 - STAR WARS Zero Company™]]></title>
+		<link>https://store.steampowered.com/app/2075800/STAR_WARS_Zero_Company?t=1788220800</link>
+		<comments>https://store.steampowered.com/forums/</comments> 
+		<pubDate>Tue, 01 Sep 2026 07:00:00 +0700</pubDate>
+		<author>Steam</author> 
+		<dc:date>2026-09-01T07:00:00+0700</dc:date>
+		<content:encoded>
+			<![CDATA[
+															<a href="https://store.steampowered.com/app/2075800/STAR_WARS_Zero_Company"><img src="https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/2075800/56484e8832119b4b37b3fa3a6a5ec23209cd835c/capsule_231x87.jpg?t=1788256323" border="0"></a><br>
+																Command an elite squad through a gritty and authentic story in STAR WARS Zero Company™, a single-player turn-based tactics game set in the twilight of the Clone Wars™.
+												]]>
+		</content:encoded>
+	</item>
+		<item rdf:about="https://store.steampowered.com/app/730/CounterStrike_2?t=1788220800">
+		<title><![CDATA[#2 - Counter-Strike 2]]></title>
+		<link>https://store.steampowered.com/app/730/CounterStrike_2?t=1788220800</link>
+		<comments>https://store.steampowered.com/forums/</comments> 
+		<pubDate>Tue, 01 Sep 2026 07:00:00 +0700</pubDate>
+		<author>Steam</author> 
+		<dc:date>2026-09-01T07:00:00+0700</dc:date>
+		<content:encoded>
+			<![CDATA[
+															<a href="https://store.steampowered.com/app/730/CounterStrike_2"><img src="https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/730/942c04efaa5bc87afb6f2a97dbf17ac614c8a84d/capsule_231x87.jpg?t=1784564069" border="0"></a><br>
+																For over two decades, Counter-Strike has offered an elite competitive experience, one shaped by millions of players from across the globe. And now the next chapter in the CS story is about to begin. This is Counter-Strike 2.												]]>
+		</content:encoded>
+	</item>
+		<item rdf:about="https://store.steampowered.com/app/4001890/How_to_Fish?t=1788220800">
+		<title><![CDATA[#3 - How to Fish]]></title>
+		<link>https://store.steampowered.com/app/4001890/How_to_Fish?t=1788220800</link>
+		<comments>https://store.steampowered.com/forums/</comments> 
+		<pubDate>Tue, 01 Sep 2026 07:00:00 +0700</pubDate>
+		<author>Steam</author> 
+		<dc:date>2026-09-01T07:00:00+0700</dc:date>
+		<content:encoded>
+			<![CDATA[
+															<a href="https://store.steampowered.com/app/4001890/How_to_Fish"><img src="https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/4001890/8f65bb2b78d37a9147aa79c970a51610e6955bf1/capsule_231x87.jpg?t=1788788717" border="0"></a><br>
+																A 1-4 player physics based fishing simulator. While drinking and boating you suddenly crash into a small island. To work your way back home you have to learn How to Fish.												]]>
+		</content:encoded>
+	</item>
+		<item rdf:about="https://store.steampowered.com/app/570/Dota_2?t=1788220800">
+		<title><![CDATA[#4 - Dota 2]]></title>
+		<link>https://store.steampowered.com/app/570/Dota_2?t=1788220800</link>
+		<comments>https://store.steampowered.com/forums/</comments> 
+		<pubDate>Tue, 01 Sep 2026 07:00:00 +0700</pubDate>
+		<author>Steam</author> 
+		<dc:date>2026-09-01T07:00:00+0700</dc:date>
+		<content:encoded>
+			<![CDATA[
+															<a href="https://store.steampowered.com/app/570/Dota_2"><img src="https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/570/capsule_231x87.jpg?t=1769535998" border="0"></a><br>
+																Every day, millions of players worldwide enter battle as one of over a hundred Dota heroes. And no matter if it's their 10th hour of play or 1,000th, there's always something new to discover. With regular updates that ensure a constant evolution of gameplay, features, and heroes, Dota 2 has taken on a life of its own.												]]>
+		</content:encoded>
+	</item>
+		<item rdf:about="https://store.steampowered.com/app/1172470/Apex_Legends?t=1788220800">
+		<title><![CDATA[#5 - Apex Legends™]]></title>
+		<link>https://store.steampowered.com/app/1172470/Apex_Legends?t=1788220800</link>
+		<comments>https://store.steampowered.com/forums/</comments> 
+		<pubDate>Tue, 01 Sep 2026 07:00:00 +0700</pubDate>
+		<author>Steam</author> 
+		<dc:date>2026-09-01T07:00:00+0700</dc:date>
+		<content:encoded>
+			<![CDATA[
+															<a href="https://store.steampowered.com/app/1172470/Apex_Legends"><img src="https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/1172470/9d25b2de9ae52a1ec06797daeaf700feba1459cc/capsule_231x87.jpg?t=1786031871" border="0"></a><br>
+																Apex Legends is the award-winning, free-to-play Hero Shooter from Respawn Entertainment. Master an ever-growing roster of legendary characters with powerful abilities, and experience strategic squad play and innovative gameplay in the next evolution of Hero Shooter and Battle Royale.												]]>
+		</content:encoded>
+	</item>
+		<item rdf:about="https://store.steampowered.com/app/4356430/NBA_2K27?t=1788220800">
+		<title><![CDATA[#6 - NBA 2K27]]></title>
+		<link>https://store.steampowered.com/app/4356430/NBA_2K27?t=1788220800</link>
+		<comments>https://store.steampowered.com/forums/</comments> 
+		<pubDate>Tue, 01 Sep 2026 07:00:00 +0700</pubDate>
+		<author>Steam</author> 
+		<dc:date>2026-09-01T07:00:00+0700</dc:date>
+		<content:encoded>
+			<![CDATA[
+															<a href="https://store.steampowered.com/app/4356430/NBA_2K27"><img src="https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/4356430/92d7aa92bafdd80d200ef25467a3680cf525836a/capsule_231x87.jpg?t=1788543808" border="0"></a><br>
+																The hustle doesn’t stop and the run never ends in NBA 2K27. Chase greatness around the clock in MyCAREER, MyTEAM, and MyNBA, and make your hoop dreams a reality.
+												]]>
+		</content:encoded>
+	</item>
+		<item rdf:about="https://store.steampowered.com/app/3321460/Crimson_Desert_Enhanced?t=1788220800">
+		<title><![CDATA[#7 - Crimson Desert Enhanced]]></title>
+		<link>https://store.steampowered.com/app/3321460/Crimson_Desert_Enhanced?t=1788220800</link>
+		<comments>https://store.steampowered.com/forums/</comments> 
+		<pubDate>Tue, 01 Sep 2026 07:00:00 +0700</pubDate>
+		<author>Steam</author> 
+		<dc:date>2026-09-01T07:00:00+0700</dc:date>
+		<content:encoded>
+			<![CDATA[
+															<a href="https://store.steampowered.com/app/3321460/Crimson_Desert_Enhanced"><img src="https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/3321460/9fef3b5648defc30432d4b3221296350354b8742/capsule_231x87.jpg?t=1788450739" border="0"></a><br>
+																Crimson Desert is an open-world action-adventure set on the continent of Pywel.
+Join Kliff on his journey to rebuild the Greymane faction and to save the land from a looming threat.
+From vast wilderness and cities to ruins and the mysterious Abyss, forge your path through battles and discovery.												]]>
+		</content:encoded>
+	</item>
+		<item rdf:about="https://store.steampowered.com/app/381210/Dead_by_Daylight?t=1788220800">
+		<title><![CDATA[#8 - Dead by Daylight]]></title>
+		<link>https://store.steampowered.com/app/381210/Dead_by_Daylight?t=1788220800</link>
+		<comments>https://store.steampowered.com/forums/</comments> 
+		<pubDate>Tue, 01 Sep 2026 07:00:00 +0700</pubDate>
+		<author>Steam</author> 
+		<dc:date>2026-09-01T07:00:00+0700</dc:date>
+		<content:encoded>
+			<![CDATA[
+															<a href="https://store.steampowered.com/app/381210/Dead_by_Daylight"><img src="https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/381210/b25ea79fe1451a4ca76b2a7592c72ff694019fa9/capsule_231x87_alt_assets_9.jpg?t=1787769494" border="0"></a><br>
+																10 years of horror. 10 years of jump scares and close calls. 10 years of brutal sacrifices and thrilling escapes.
+
+Trapped forever in a realm of eldritch evil where even death is not an escape, four determined Survivors face a bloodthirsty Killer in a vicious game of nerve and wits. 												]]>
+		</content:encoded>
+	</item>
+		<item rdf:about="https://store.steampowered.com/app/4080220/EA_SPORTS_FC_27?t=1788220800">
+		<title><![CDATA[#9 - EA SPORTS FC™ 27]]></title>
+		<link>https://store.steampowered.com/app/4080220/EA_SPORTS_FC_27?t=1788220800</link>
+		<comments>https://store.steampowered.com/forums/</comments> 
+		<pubDate>Tue, 01 Sep 2026 07:00:00 +0700</pubDate>
+		<author>Steam</author> 
+		<dc:date>2026-09-01T07:00:00+0700</dc:date>
+		<content:encoded>
+			<![CDATA[
+															<a href="https://store.steampowered.com/app/4080220/EA_SPORTS_FC_27"><img src="https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/4080220/b2e806003c348d3348774cddb10e5b31cd787ecf/capsule_231x87.jpg?t=1788235145" border="0"></a><br>
+																Welcome to The World’s Game in EA SPORTS FC™ 27.
+Step into The Grounds to experience a football playground where the streets meet the stadium, and feel greater control in every mode as community-driven innovations deliver more true-to-football gameplay.												]]>
+		</content:encoded>
+	</item>
+		<item rdf:about="https://store.steampowered.com/app/1867240/WARDOGS?t=1788220800">
+		<title><![CDATA[#10 - WARDOGS]]></title>
+		<link>https://store.steampowered.com/app/1867240/WARDOGS?t=1788220800</link>
+		<comments>https://store.steampowered.com/forums/</comments> 
+		<pubDate>Tue, 01 Sep 2026 07:00:00 +0700</pubDate>
+		<author>Steam</author> 
+		<dc:date>2026-09-01T07:00:00+0700</dc:date>
+		<content:encoded>
+			<![CDATA[
+															<a href="https://store.steampowered.com/app/1867240/WARDOGS"><img src="https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/1867240/11d3bb7607c5568c61108fe70e7c670b4940269e/capsule_231x87.jpg?t=1788683537" border="0"></a><br>
+																WARDOGS is a TACTICAL ALL OUT WARFARE FPS where one hundred players split across three teams fight over the control zone. Set in the derelict industrial mountains of Eastern Europe on a destructible battlefield where teamwork pays and cash is king.												]]>
+		</content:encoded>
+	</item>
+	</rdf:RDF>

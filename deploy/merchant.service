@@ -1,0 +1,43 @@
+# merchant — game-deal announcements for Discord.
+#
+# Installed as a user unit, like the rest of the non-KGSM services on this host:
+#   systemctl --user enable --now merchant
+#
+# The token lives in ~/.config/merchant/merchant.env, mode 0600, and never in this file or in git.
+[Unit]
+Description=merchant — game-deal announcements for Discord
+Documentation=https://github.com/TheKrystalShip/merchant
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# %h expands here but not inside an EnvironmentFile, so the ledger path is set in the unit and the
+# env file carries only the token and the tunables.
+Environment=MERCHANT_DB=%h/.local/state/merchant/merchant.db
+EnvironmentFile=%h/.config/merchant/merchant.env
+ExecStart=%h/.local/share/merchant/merchant
+WorkingDirectory=%h/.local/share/merchant
+
+# The gateway drops and reconnects as a matter of course; only a crash should restart the process.
+Restart=on-failure
+RestartSec=15s
+
+# It talks to Discord and five feed hosts, and writes one SQLite file. Nothing else is needed.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.local/state/merchant
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=merchant
+
+[Install]
+WantedBy=default.target
