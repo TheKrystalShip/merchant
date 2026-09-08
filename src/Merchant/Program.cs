@@ -174,11 +174,15 @@ discord.Ready += async () =>
 await discord.LoginAsync(TokenType.Bot, token);
 await discord.StartAsync();
 
-await host.RunAsync();
+await host.StartAsync();
+await host.WaitForShutdownAsync();
 
-// RunAsync returns on SIGTERM, which is a restart or a deploy nine times out of ten. Closing the
-// session says so: the bot shows offline at once instead of hanging around until the gateway times
-// it out, and the ledger is disposed with the host immediately after.
+// Started and waited on rather than RunAsync, which disposes the host the moment it returns — and
+// the host owns the gateway client, so the logout below would be talking to a disposed object.
+//
+// Shutdown is SIGTERM, which is a restart or a deploy nine times out of ten. Closing the session
+// says so: the bot shows offline at once instead of hanging around until the gateway times it out.
+// The host is disposed by the using above, after this, and the ledger after that.
 await discord.StopAsync();
 await discord.LogoutAsync();
 
