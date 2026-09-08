@@ -29,6 +29,10 @@ That is the entire setup.
 
 Each posts in its own colour, so channels read apart at a glance.
 
+Those five are what merchant ships with, not what it can do: the catalog is a settings file, so
+adding, changing or removing a feed is an edit and a restart. See
+[Configuration](#configuration).
+
 ## Commands
 
 Everything is under `/merchant`, and every reply is ephemeral — setup does not clutter the channel.
@@ -90,15 +94,30 @@ docker run -d --name merchant \
 
 ### Configuration
 
-All of it is environment variables; there is no settings file.
+One file, `~/.config/merchant/appsettings.json` — or wherever `MERCHANT_CONFIG` points, which the
+container sets to `/data/appsettings.json`. If it is not there, merchant writes the shipped example
+to it on first run and uses that, so an empty volume still produces a working bot.
 
-| Variable                 | Default          | Meaning                                                                  |
-| ------------------------ | ---------------- | ------------------------------------------------------------------------ |
-| `MERCHANT_TOKEN`         | —                | **Required.** The bot token.                                             |
-| `MERCHANT_DB`            | `merchant.db`    | Where the ledger lives.                                                  |
-| `MERCHANT_SWEEP_MINUTES` | `30`             | How often feeds are fetched. Clamped to 5–720.                           |
-| `MERCHANT_USER_AGENT`    | `merchant/1.0 …` | Sent on every fetch. CheapShark rejects a generic one.                   |
-| `MERCHANT_DEV_GUILD`     | unset            | Register commands to one server, which is instant. Global takes an hour. |
+It takes comments and trailing commas, and the copy merchant seeds is annotated throughout.
+
+```jsonc
+{
+  "bot": {
+    "databasePath": "merchant.db",   // where the ledger lives
+    "sweepMinutes": 30,              // how often every feed is fetched, 5–720
+    "userAgent": "merchant/1.0 (…)"  // CheapShark rejects a generic one
+    // "devGuildId": 123…            // register commands to one server; instant, vs an hour
+  },
+  "feeds": { /* … */ }
+}
+```
+
+The **token is never read from this file** — it comes from `MERCHANT_TOKEN` and nowhere else, so the
+settings file can be copied around, pasted into a chat window or committed without leaking anything.
+
+Every setting above can still be overridden by the environment variable that configured it before
+the file existed (`MERCHANT_DB`, `MERCHANT_SWEEP_MINUTES`, `MERCHANT_USER_AGENT`,
+`MERCHANT_DEV_GUILD`), which is how the unit file and the container pass them.
 
 ## Checking the feeds
 
@@ -106,8 +125,10 @@ All of it is environment variables; there is no settings file.
 merchant --check        # or: merchant --check ES
 ```
 
-Fetches all five feeds and reports counts, timings and the first item of each. Needs no token and
-touches no Discord, so it is the first thing to run when a channel goes quiet.
+Fetches every configured feed and reports counts, timings and the first item of each. It reads and
+checks the settings file first, so a mistake in an edit shows up here — named — rather than as a
+channel that quietly stops posting. Needs no token and touches no Discord, so it is also the first
+thing to run when a channel goes quiet.
 
 ```
 ok   top-week         5 items    470 ms  Top Games of the Week
@@ -119,7 +140,7 @@ ok   under-10        20 items    680 ms  Games Under $10
 ## Development
 
 ```bash
-dotnet test        # 61 tests, no network
+dotnet test        # 113 tests, no network
 dotnet run --project src/Merchant -- --check
 ```
 
@@ -129,8 +150,40 @@ Refresh them when a source changes shape.
 
 ## Adding a feed
 
-A row in `Catalog.All`, a case in `Catalog.SourceFor`, and a member on `FeedChoice`. Storage,
-scheduling, digests and commands need no change; a test asserts the catalog and the menu agree.
+Edit `~/.config/merchant/appsettings.json` and restart. Nothing is rebuilt, and the menu picks the
+new feed up on its own — the feed list is resolved when somebody opens it, not registered with
+Discord in advance.
+
+```jsonc
+"indie-picks": {
+  "label": "Indie Picks",              // what the menu and the embeds show
+  "description": "Small games worth a look.",
+  "channel": "indie-picks",            // suggested channel name; defaults to the key
+  "cadence": "Daily",                  // Live, Daily or Weekly. Default: Daily
+  "colour": "#8B5CF6",                 // embed accent. Default: #5865F2
+  // "enabled": false,                 // park a feed without deleting it
+  "source": {
+    "type": "rss",
+    "urls": [ "https://example.test/indies.rss" ]
+  }
+}
+```
+
+The key (`indie-picks`) is what the ledger stores, so renaming one orphans the channels already
+using it. Sources come in two kinds:
+
+| `type`       | Options                                        | Notes                                                |
+| ------------ | ---------------------------------------------- | ---------------------------------------------------- |
+| `rss`        | `urls` — one or more, merged                    | RSS 1.0, RSS 2.0 and Atom, no format flag needed. A URL may contain `{region}` or `{currency}`, filled in per server from `/merchant region`. |
+| `cheapshark` | `upperPrice`, `minMetacritic`, `sortBy`         | Structured prices, so the embeds can strike through a list price. Always quoted in USD. |
+
+Run `merchant --check` after an edit: it validates the file and fetches everything. A feed with a
+mistake in it is dropped with an explanation naming the feed, and the others keep running — one typo
+should not take a server's channels offline.
+
+A genuinely new *kind* of upstream — something that is neither a syndication feed nor CheapShark —
+is the one thing that still needs code: an `ISourceFactory` in `src/Merchant/Feeds/Factories` and a
+line in `Program.cs`. Every feed built on a kind that already exists is config alone.
 
 ## Licence
 

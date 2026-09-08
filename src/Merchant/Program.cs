@@ -1,35 +1,95 @@
 using Merchant;
 using Merchant.Discord;
+using Merchant.Feeds;
+using Merchant.Feeds.Factories;
 using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-// The feed check needs no token and no gateway, so it runs before anything is configured.
-if (args is [_, ..] && args[0] is "--check" or "check")
+// Everything merchant posts is described by one settings file, so reading it is the first thing
+// that happens on either path — the bot's and --check's. A missing file is seeded rather than
+// refused: a fresh container with an empty volume should come up working and leave behind the file
+// to edit.
+string configPath = MerchantConfig.ResolvePath();
+
+if (MerchantConfig.Seed(configPath) is { } seedProblem)
 {
-    string region = args.Length > 1 ? args[1] : "US";
-    return await Preflight.RunAsync(region, CancellationToken.None);
+    Console.Error.WriteLine(seedProblem);
+    return 1;
 }
 
-BotOptions options;
+IConfigurationRoot config;
 
 try
 {
-    options = BotOptions.FromEnvironment();
+    config = MerchantConfig.Load(configPath);
 }
-catch (InvalidOperationException ex)
+catch (Exception ex) when (ex is InvalidDataException or IOException or FormatException)
 {
-    Console.Error.WriteLine(ex.Message);
+    Console.Error.WriteLine($"Could not read {configPath}: {ex.Message}");
+    return 1;
+}
+
+List<string> problems = [];
+BotOptions options = BotOptions.Load(config, problems);
+
+SourceRegistry registry = new([new RssSourceFactory(), new CheapSharkSourceFactory()]);
+FeedCatalog catalog = FeedCatalog.Load(config.GetSection("feeds"), registry, out CatalogReport report);
+
+// Said once, on stderr, before any logger exists — this is the output somebody stares at after
+// editing the file, and every line names the feed and what to fix.
+Console.Error.WriteLine($"Settings: {configPath}");
+
+foreach (string problem in problems.Concat(report.Errors))
+{
+    Console.Error.WriteLine($"  ! {problem}");
+}
+
+Console.Error.WriteLine($"  {report.Summary}");
+
+if (catalog.All.Count == 0)
+{
+    Console.Error.WriteLine(
+        "No usable feeds, so there is nothing merchant could announce. Fix the errors above, " +
+        $"or delete {configPath} to have the shipped example written back.");
+    return 1;
+}
+
+// The feed check needs no token and no gateway, so it runs before anything else is configured.
+if (args is [_, ..] && args[0] is "--check" or "check")
+{
+    return await Preflight.RunAsync(
+        catalog, options.UserAgent, args.Length > 1 ? args[1] : "US", CancellationToken.None);
+}
+
+string? token = Environment.GetEnvironmentVariable(BotOptions.TokenVariable);
+
+if (string.IsNullOrWhiteSpace(token))
+{
+    Console.Error.WriteLine(
+        $"{BotOptions.TokenVariable} is not set. Create an application at https://discord.com/developers, " +
+        $"add a bot to it, and put its token in {BotOptions.TokenVariable}.");
     return 1;
 }
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 
+// Added last so merchant's own file wins over anything the host picked up beside the binary.
+builder.Configuration.AddConfiguration(config);
+
 builder.Services.AddSingleton(options);
+builder.Services.AddSingleton(catalog);
 builder.Services.AddSingleton(new Merchant.Store.Store(options.DatabasePath));
+
+// A driver is a class and a line here. Nothing else in the codebase names one, which is what keeps
+// the catalog in the settings file rather than spread across a switch and an enum.
+builder.Services.AddSingleton<ISourceFactory, RssSourceFactory>();
+builder.Services.AddSingleton<ISourceFactory, CheapSharkSourceFactory>();
+builder.Services.AddSingleton<SourceRegistry>();
 
 // Every outbound fetch goes through this one client, so the user agent is impossible to forget.
 // CheapShark refuses a request without a descriptive one, and Reddit throttles it harder.
@@ -87,14 +147,17 @@ discord.Ready += async () =>
         logger.LogInformation("Commands registered globally.");
     }
 
+    // The feed list is not registered with Discord — it is resolved per keystroke by the
+    // autocomplete handler — so editing the settings file and restarting is the whole of it.
     logger.LogInformation(
-        "merchant is up as {User}, sweeping every {Minutes} minute(s), ledger at {Path}.",
+        "merchant is up as {User}, {Feeds} feed(s), sweeping every {Minutes} minute(s), ledger at {Path}.",
         discord.CurrentUser?.Username ?? "?",
+        catalog.All.Count,
         options.SweepInterval.TotalMinutes,
         options.DatabasePath);
 };
 
-await discord.LoginAsync(TokenType.Bot, options.Token);
+await discord.LoginAsync(TokenType.Bot, token);
 await discord.StartAsync();
 
 await host.RunAsync();

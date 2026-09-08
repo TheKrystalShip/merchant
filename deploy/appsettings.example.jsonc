@@ -1,0 +1,127 @@
+// merchant's settings. This file is the whole catalog: every feed merchant can post is described
+// here, and adding, changing or removing one is an edit and a restart. There is nothing to rebuild.
+//
+// It lives at ~/.config/merchant/appsettings.json (or wherever MERCHANT_CONFIG points, which is
+// /data/appsettings.json in the container). Delete it and merchant writes this example back.
+//
+// Comments and trailing commas are fine — the JSON reader allows both.
+{
+  "bot": {
+    // Where the ledger of what has already been posted is kept.
+    "databasePath": "merchant.db",
+
+    // How often every subscribed feed is fetched, 5 to 720. This is not how often a channel hears
+    // from merchant: that is each subscription's own cadence, chosen when it is set up.
+    "sweepMinutes": 30,
+
+    // Sent on every request. CheapShark refuses a request without a descriptive user agent, and
+    // Reddit throttles a generic one harder, so leave the shape of this alone.
+    "userAgent": "merchant/1.0 (Discord game-deal announcer; +https://github.com/TheKrystalShip/merchant)"
+
+    // Register commands into one server instead of globally. Guild commands appear instantly where
+    // global ones take up to an hour, so set this while developing and remove it afterwards.
+    // "devGuildId": 123456789012345678
+
+    // The bot token is NOT read from this file, ever. It comes from MERCHANT_TOKEN, so this file
+    // can be copied, pasted into a chat window or committed without leaking anything.
+  },
+
+  // Each feed is named by its key — lower case, hyphenated. The key is what the ledger stores and
+  // what the /merchant add menu sends back, so renaming one orphans the channels already using it.
+  //
+  //   label         what the menu and the embeds show. Up to 100 characters.
+  //   description   one line explaining what lands in the channel.
+  //   channel       suggested channel name, offered to somebody who has not made one yet.
+  //   cadence       Live, Daily or Weekly — the default this feed is offered with. Default: Daily.
+  //   colour        embed accent, so channels read apart at a glance. Default: #5865F2.
+  //   enabled       set false to park a feed without deleting it. Default: true.
+  //   source        where the items come from. See the two kinds below.
+  //
+  // Sources come in two kinds:
+  //
+  //   { "type": "rss", "urls": [ … ] }
+  //       One or more feeds, merged. RSS 1.0, RSS 2.0 and Atom all work without being told which.
+  //       A URL may contain {region} or {currency}, filled in per server from /merchant region.
+  //
+  //   { "type": "cheapshark", "upperPrice": 10, "minMetacritic": 75, "sortBy": "Savings" }
+  //       A slice of CheapShark's deals API. All three are optional. sortBy is one of Deal Rating,
+  //       Title, Savings, Price, Metacritic, Reviews, Release, Store or Recent. Prices are always
+  //       quoted in US dollars — CheapShark has no regional pricing.
+  //
+  // A feed with a mistake in it is dropped with an explanation on startup; the others still run.
+  "feeds": {
+
+    "top-week": {
+      "label": "Top Games of the Week",
+      "description": "Steam's ten best sellers of the week, ranked. Valve publishes it every Tuesday.",
+      "channel": "top-games-of-the-week",
+      // Weekly, not Live: the chart barely moves, so posting it as it appears would repost the
+      // same ten games every sweep for seven days.
+      "cadence": "Weekly",
+      "colour": "#1B2838",
+      "source": {
+        "type": "rss",
+        "urls": [ "https://store.steampowered.com/feeds/weeklytopsellers.xml" ]
+      }
+    },
+
+    "under-10": {
+      "label": "Games Under $10",
+      "description": "Everything discounted to ten or less, best deals first. The bargain bin, filtered.",
+      "channel": "games-under-10",
+      "cadence": "Daily",
+      "colour": "#C24A12",
+      // CheapShark rather than a price-filtered IsThereAnyDeal feed: ITAD encodes its filters into
+      // an opaque token its own site mints, so a price ceiling cannot be written into a URL.
+      "source": {
+        "type": "cheapshark",
+        "upperPrice": 10,
+        "sortBy": "Deal Rating"
+      }
+    },
+
+    "best-deals": {
+      "label": "Best Game Deals",
+      "description": "Big discounts on games that actually reviewed well — 75+ on Metacritic.",
+      "channel": "best-game-deals",
+      "cadence": "Daily",
+      "colour": "#2A7150",
+      "source": {
+        "type": "cheapshark",
+        "minMetacritic": 75,
+        "sortBy": "Savings"
+      }
+    },
+
+    "worth-playing": {
+      "label": "Worth Checking Out",
+      "description": "Picks from Rock Paper Shotgun, PC Gamer and the top of r/GameDeals this week.",
+      "channel": "worth-checking-out",
+      "cadence": "Daily",
+      "colour": "#453EA0",
+      "source": {
+        "type": "rss",
+        "urls": [
+          "https://www.rockpapershotgun.com/feed",
+          "https://www.pcgamer.com/rss/",
+          "https://www.reddit.com/r/GameDeals/top/.rss?t=week&limit=25"
+        ]
+      }
+    },
+
+    "free-games": {
+      "label": "Free Games & Giveaways",
+      "description": "Games that are free to keep right now, while the giveaway lasts.",
+      "channel": "free-games",
+      // Live: a giveaway that is announced a day late is a giveaway somebody missed.
+      "cadence": "Live",
+      "colour": "#9B59B6",
+      "source": {
+        "type": "rss",
+        // {region} becomes the server's country code — giveaways vary by storefront.
+        "urls": [ "https://isthereanydeal.com/feeds/{region}/giveaways.rss" ]
+      }
+    }
+
+  }
+}

@@ -8,7 +8,9 @@ namespace Merchant.Tests;
 /// <summary>What actually lands in the channel.</summary>
 public class AnnouncerTests
 {
-    private static readonly Category Deals = Catalog.Find(Catalog.BestDeals)!;
+    private static readonly Category Deals = new(
+        "best-deals", "Best Game Deals", "Big discounts on games that reviewed well.",
+        "best-game-deals", Cadence.Daily, 0x2A7150);
 
     private static FeedItem Deal(string title = "Hollow Knight") => new(
         "cheapshark:x", title, "https://example.test/deal",
@@ -108,13 +110,5 @@ public class AnnouncerTests
         Embed embed = Announcer.Digest(Deals, items, "today");
 
         Assert.True(embed.Description!.Length <= 4096);
-    }
-
-    [Fact]
-    public void Each_category_gets_its_own_colour_so_channels_read_apart()
-    {
-        List<uint> colours = [.. Catalog.All.Select(c => c.Colour)];
-
-        Assert.Equal(colours.Count, colours.Distinct().Count());
     }
 }

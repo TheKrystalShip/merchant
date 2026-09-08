@@ -8,6 +8,9 @@ COPY src/Merchant/Merchant.csproj src/Merchant/
 RUN dotnet restore src/Merchant/Merchant.csproj
 
 COPY src/ src/
+# The example catalog is a Content item of the project: it has to be in the build context, or the
+# published image ships without the file it seeds a fresh volume from.
+COPY deploy/appsettings.example.jsonc deploy/
 RUN dotnet publish src/Merchant/Merchant.csproj -c Release -o /app --no-restore
 
 FROM mcr.microsoft.com/dotnet/runtime:10.0 AS runtime
@@ -17,6 +20,11 @@ COPY --from=build /app ./
 # The ledger is the only state. Mount this to keep it across upgrades; lose it and merchant reposts
 # whatever each feed is currently offering, once.
 ENV MERCHANT_DB=/data/merchant.db
+
+# The feed catalog. Nothing is baked into the image: on a first run merchant writes the shipped
+# example here, so an empty volume still produces a working bot and leaves behind the file to edit.
+ENV MERCHANT_CONFIG=/data/appsettings.json
+
 VOLUME /data
 
 # No token baked in, ever. Pass it at run time: docker run -e MERCHANT_TOKEN=... 

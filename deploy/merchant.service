@@ -4,6 +4,9 @@
 #   systemctl --user enable --now merchant
 #
 # The token lives in ~/.config/merchant/merchant.env, mode 0600.
+# The feeds live in ~/.config/merchant/appsettings.json — edit it and restart to change them.
+# ProtectHome=read-only means the service cannot write that file, only read it; deploy/install.sh
+# puts it there. Delete it and run ~/.local/share/merchant/merchant --check to have it written back.
 [Unit]
 Description=Merchant — game-deal announcements for Discord
 Documentation=https://github.com/TheKrystalShip/merchant

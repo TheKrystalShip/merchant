@@ -18,10 +18,15 @@ design decision below follows from that.
 ## The shape
 
 ```
-Catalog ── five categories, each naming a source and a default cadence      Feeds/Catalog.cs
-    │
+appsettings.json ── the catalog: every feed, its source, colour and cadence   ~/.config/merchant/
+    │               seeded from deploy/appsettings.example.jsonc on a first run
+FeedCatalog ─ loads and validates it once at startup                        Feeds/FeedCatalog.cs
+    │         a bad entry is dropped and named; an empty catalog is fatal
+SourceRegistry ─ ISourceFactory[] keyed by "type" → validated blueprints          Feeds/
+    │            RssSourceFactory, CheapSharkSourceFactory                Feeds/Factories/
 Sources ── ISource[]: RssSource (RSS 1.0 / RSS 2.0 / Atom), CheapSharkSource     Sources/
     │      flatten everything to FeedItem; a dead feed returns empty, never throws
+    │      config-blind: a source fetches, and does not know where its URL came from
     │
 Store ──── SQLite. subscriptions · guilds · seen                            Store/Store.cs
     │      `seen` doubles as the digest buffer: posted = 0 means "waiting"
@@ -32,13 +37,44 @@ Sweeper ── BackgroundService. Fetch everything on one interval,          Dis
 Announcer ─ FeedItem → Embed. One card when live, one list when a digest  Discord/Announcer.cs
     │
 MerchantModule ─ /merchant add · list · remove · preview · region · help      Discord/MerchantModule.cs
+    │            the feed parameter is autocompleted from the catalog   Discord/FeedAutocomplete.cs
 ```
 
 ## Decisions worth keeping
 
 **The catalog is the product.** A person picks "Games Under $10", not a URL, a filter and a poll
-interval. Keep it around five entries. If a change would make somebody paste a feed URL into a
-command, it is the wrong change — that is the thing merchant exists to avoid.
+interval. If a change would make somebody paste a feed URL into a *command*, it is the wrong change —
+that is the thing merchant exists to avoid. Around five entries is still the right size, but that is
+now a curation guideline for whoever edits the settings file, not something the code enforces.
+
+**The catalog is data, and drivers are code.** Nothing in this assembly knows what a feed is: URLs,
+filters, labels, colours and cadences all live in `appsettings.json`, and adding one is an edit and a
+restart. What stays in C# is a *driver* — a class that knows a wire format. `ISourceFactory` is the
+seam: it owns both what its options mean and what a bad value looks like, so a new driver is one
+class in `Feeds/Factories` and one line in `Program.cs`, with no switch anywhere to keep in step.
+Resist a generic JSON-mapping driver until something actually needs it; that trades a rebuild for a
+mini-language living in a settings file.
+
+**The feed menu is autocompleted, not registered.** Discord is told a command's choices once, when
+it is registered, so a compile-time `enum` was the only way to have a real dropdown — and it made the
+catalog impossible to move out of the code. `FeedAutocomplete` is asked on every keystroke including
+the empty one, so the list still appears the moment the field is focused, and editing the settings
+file never requires re-registering a command. The cost is that free text is submittable: `add` and
+`preview` answer an unknown feed by naming what does exist.
+
+**Config children come back sorted by key, not in document order.** `ConfigurationProvider.GetChildKeys`
+sorts with `ConfigurationKeyComparer`, so the file's own order cannot be relied on. The menus order
+by label instead, which is decided in one place — `FeedCatalog`'s constructor.
+
+**One malformed feed is dropped, not fatal.** The person editing that file is usually not the person
+who wrote merchant. A resident bot dying at 3am over one typo is a worse failure than four working
+feeds and a loud line at startup, so every rejection names its feed and what was expected. A catalog
+that ends up *empty* is fatal: that bot is broken either way and should say so.
+
+**The token is not in the settings file and not in the container.** It is read straight from
+`MERCHANT_TOKEN` into a local in `Program.cs` and handed to `LoginAsync`. Keeping it off `BotOptions`
+keeps the one secret merchant holds out of a DI singleton every command can reach, and out of a file
+that gets copied around. A `bot.token` in the file is reported and ignored, never used.
 
 **Sweeping and posting are separate.** Everything is fetched on one interval; each subscription
 posts on its own clock, reading the backlog the sweep filed. This is the only reason a weekly
@@ -89,13 +125,16 @@ hitting it has no access to the logs.
 
 ```bash
 dotnet build
-dotnet test                                    # 61 tests, no network
-dotnet run --project src/Merchant -- --check      # fetch all five feeds live, no token needed
+dotnet test                                    # 113 tests, no network
+dotnet run --project src/Merchant -- --check      # validate the settings file, fetch every feed
 dotnet run --project src/Merchant -- --check ES   # …for another region
 ```
 
-`--check` is the first thing to reach for when a channel goes quiet: it separates "the feed
-changed" from "Discord is unhappy" without a token and without touching a server.
+`--check` reads and validates the same settings file the bot does, so it is also how an edit gets
+checked. Point `MERCHANT_CONFIG` at a scratch file to try a catalog without touching the real one.
+
+It is the first thing to reach for when a channel goes quiet: it separates "the feed changed" from
+"Discord is unhappy" without a token and without touching a server.
 
 Set `MERCHANT_DEV_GUILD` while developing. Guild commands register instantly; global ones take up to
 an hour, which makes iterating on a command signature unbearable otherwise.
@@ -108,22 +147,31 @@ RSS 2.0 (CDATA and HTML entities), Reddit's Atom (link in an `href`), and a Chea
 Hand-written fixtures agree with the parser by construction and prove nothing. Refresh them from
 the live feeds when a source changes shape.
 
-`CatalogTests` asserts `Catalog.All` and `FeedChoice` stay in step — they are two hand-maintained
-lists that must agree, and Discord needs the enum because choices are registered up front.
+`FeedCatalogTests` holds the settings file to account rather than the code. Its theory data is the
+catalog as it stood when it lived in `Catalog.cs` — the five feeds, their labels, channels, cadences,
+colours and source types — so the shipped example cannot drift from what merchant used to post. The
+rest of it asserts that every rejection names its feed and what was expected, because that message is
+the entire interface for somebody with a text editor and no access to this repository.
 
 ## Adding a feed
 
-1. A row in `Catalog.All` with its own colour.
-2. A case in `Catalog.SourceFor`.
-3. A member on `FeedChoice` with a `[ChoiceDisplay]`.
+Edit `appsettings.json` and restart. No code, no rebuild, no command re-registration. `deploy/appsettings.example.jsonc`
+documents every field inline and is the file a fresh install is seeded with, so a new field belongs
+in its comments too.
 
-Storage, scheduling, digests and the commands need no change. `CatalogTests` fails if step 3 is
-forgotten.
+Adding a new *kind* of source is a class in `Feeds/Factories` implementing `ISourceFactory` and a
+`AddSingleton<ISourceFactory, …>()` in `Program.cs`. It returns an `ISourceBlueprint`, which is a
+source definition that has already been validated — everything that can be wrong about a feed has
+been said out loud at startup, so nothing can fail for the first time during a sweep.
 
 ## Deploying
 
 `deploy/install.sh` publishes to `~/.local/share/merchant` and installs the user unit; the token lives
-in `~/.config/merchant/merchant.env` at mode 0600 and never in git. The `Dockerfile` is the portable
+in `~/.config/merchant/merchant.env` at mode 0600 and never in git, and the catalog in
+`~/.config/merchant/appsettings.json` beside it. install.sh seeds both and overwrites neither, which
+matters because it republishes over the whole install directory — anything editable has to live
+outside it. The unit runs with `ProtectHome=read-only`, so the service can read that file but not
+seed it; the container can, and points `MERCHANT_CONFIG` at its volume. The `Dockerfile` is the portable
 half — same code, token passed at run time, ledger on a volume at `/data`.
 
 The ledger is the only state. Losing it makes merchant repost whatever each feed currently offers,

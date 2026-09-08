@@ -17,6 +17,9 @@ public sealed partial class RssSource : ISource
     private readonly HttpClient _http;
     private readonly IReadOnlyList<string> _urls;
 
+    /// <summary>The feeds this source reads, with any placeholders already filled in.</summary>
+    internal IReadOnlyList<string> Urls => _urls;
+
     /// <summary>Reads the given feed URLs, merging their items into one list.</summary>
     public RssSource(HttpClient http, IReadOnlyList<string> urls)
     {

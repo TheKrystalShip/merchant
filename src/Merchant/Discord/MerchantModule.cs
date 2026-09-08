@@ -30,18 +30,21 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
 
     private readonly Store.Store _store;
     private readonly IHttpClientFactory _http;
+    private readonly FeedCatalog _catalog;
 
-    /// <summary>Wires the commands to the ledger and the network.</summary>
-    public MerchantModule(Store.Store store, IHttpClientFactory http)
+    /// <summary>Wires the commands to the ledger, the network and the configured catalog.</summary>
+    public MerchantModule(Store.Store store, IHttpClientFactory http, FeedCatalog catalog)
     {
         _store = store;
         _http = http;
+        _catalog = catalog;
     }
 
     /// <summary>Wires a feed to a channel.</summary>
     [SlashCommand("add", "Start posting a feed to a channel.")]
     public async Task AddAsync(
-        [Summary("feed", "What should be announced.")] FeedChoice feed,
+        [Summary("feed", "What should be announced.")]
+        [Autocomplete(typeof(FeedAutocomplete))] string feed,
         [Summary("channel", "Where it should be posted.")] ITextChannel channel,
         [Summary("how-often", "Leave as recommended unless you have a reason.")]
         CadenceChoice howOften = CadenceChoice.Default,
@@ -49,8 +52,11 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
     {
         await DeferAsync(ephemeral: true);
 
-        string key = feed.ToKey();
-        Category category = Catalog.Find(key)!;
+        if (_catalog.Find(feed) is not { } category)
+        {
+            await FollowupAsync(embed: Unknown(feed), ephemeral: true);
+            return;
+        }
 
         if (Missing(channel) is { Count: > 0 } missing)
         {
@@ -68,7 +74,7 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
 
         Cadence cadence = howOften.Resolve(category);
         (long id, bool created) = _store.Subscribe(
-            GuildId, channel.Id, key, cadence, ping?.Id);
+            GuildId, channel.Id, category.Key, cadence, ping?.Id);
 
         EmbedBuilder embed = new EmbedBuilder()
             .WithColor(new Color(category.Colour))
@@ -105,12 +111,21 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
 
         foreach (Subscription subscription in subscriptions)
         {
-            Category? category = Catalog.Find(subscription.CategoryKey);
+            Category? category = _catalog.Find(subscription.CategoryKey);
 
             body.Append("`#").Append(subscription.Id).Append("` **")
                 .Append(category?.Label ?? subscription.CategoryKey).Append("** → ")
                 .Append(MentionUtils.MentionChannel(subscription.ChannelId))
                 .Append(" · ").Append(subscription.Cadence.Describe());
+
+            // A feed can be taken out of the settings file while a channel is still subscribed to
+            // it. The sweep already skips those; saying so here is the difference between a
+            // channel that has quietly stopped and one that is visibly waiting to be cleaned up.
+            if (category is null)
+            {
+                body.Append(" · **retired** — remove it with `/merchant remove id:")
+                    .Append(subscription.Id).Append('`');
+            }
 
             if (subscription.MentionRoleId is { } role)
             {
@@ -160,16 +175,21 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
     /// <summary>Fetches a feed right now and shows one item, without wiring anything up.</summary>
     [SlashCommand("preview", "See what a feed looks like before you set it up.")]
     public async Task PreviewAsync(
-        [Summary("feed", "The feed to sample.")] FeedChoice feed)
+        [Summary("feed", "The feed to sample.")]
+        [Autocomplete(typeof(FeedAutocomplete))] string feed)
     {
         await DeferAsync(ephemeral: true);
 
-        string key = feed.ToKey();
-        Category category = Catalog.Find(key)!;
+        if (_catalog.Find(feed) is not { } category)
+        {
+            await FollowupAsync(embed: Unknown(feed), ephemeral: true);
+            return;
+        }
+
         GuildSettings settings = _store.Settings(GuildId);
 
-        ISource source = Catalog.SourceFor(
-            key, _http.CreateClient(BotOptions.HttpClientName), settings);
+        ISource source = _catalog.SourceFor(
+            category.Key, _http.CreateClient(BotOptions.HttpClientName), settings);
 
         IReadOnlyList<FeedItem> items = await source.FetchAsync(CancellationToken.None);
 
@@ -207,9 +227,7 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
             .WithTitle($"Prices now quoted for {settings.Region}")
             .WithDescription($"""
                  Giveaways and deals will use the **{settings.Region}** storefront and **{settings.Currency}**.
-
-                 One caveat worth knowing: *Games Under $10* and *Best Game Deals* come from a source
-                 that only quotes US dollars, so those two stay in USD whatever this is set to.
+                 {UsdCaveat()}
                  """)
             .WithColor(new Color(0x2A7150))
             .Build(),
@@ -230,7 +248,9 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
             .WithColor(new Color(0xC24A12))
             .WithFooter("/merchant add · /merchant list · /merchant remove · /merchant preview · /merchant region");
 
-        foreach (Category category in Catalog.All)
+        // Discord refuses an embed with more than 25 fields, so a long catalog shows the first
+        // 25 rather than failing the command outright.
+        foreach (Category category in _catalog.All.Take(25))
         {
             embed.AddField(
                 category.Label,
@@ -266,6 +286,36 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
         ChannelPermissions permissions = self.GetPermissions(channel);
         return [.. Required.Where(r => !r.Held(permissions)).Select(r => r.Name)];
     }
+
+    /// <summary>
+    /// The caveat about US dollars, named from the catalog rather than from memory: the feeds it
+    /// applies to are whichever ones are backed by CheapShark, which quotes USD and nothing else.
+    /// </summary>
+    private string UsdCaveat()
+    {
+        string[] priced = [.. _catalog.All
+            .Where(c => _catalog.SourceType(c.Key) == "cheapshark")
+            .Select(c => $"*{c.Label}*")];
+
+        return priced.Length == 0
+            ? string.Empty
+            : $"""
+
+               One caveat worth knowing: {string.Join(" and ", priced)} come from a source that only
+               quotes US dollars, so those stay in USD whatever this is set to.
+               """;
+    }
+
+    /// <summary>The reply to a feed name that is not in the catalog.</summary>
+    private Embed Unknown(string feed) => Problem(
+        $"There is no feed called \"{Format.Sanitize(feed.Trim())}\"",
+        _catalog.All.Count == 0
+            ? "No feeds are configured yet. Whoever runs merchant needs to look at its settings file."
+            : $"""
+               Start typing in the **feed** box and pick from the list that appears.
+
+               Right now merchant can post: {string.Join(", ", _catalog.All.Select(c => c.Label))}.
+               """);
 
     /// <summary>A refusal that says what to do about it.</summary>
     private static Embed Problem(string title, string what) => new EmbedBuilder()

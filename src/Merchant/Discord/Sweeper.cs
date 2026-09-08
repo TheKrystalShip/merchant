@@ -32,6 +32,7 @@ public sealed class Sweeper : BackgroundService
     private readonly DiscordSocketClient _discord;
     private readonly Store.Store _store;
     private readonly IHttpClientFactory _http;
+    private readonly FeedCatalog _catalog;
     private readonly BotOptions _options;
     private readonly ILogger<Sweeper> _log;
 
@@ -40,12 +41,14 @@ public sealed class Sweeper : BackgroundService
         DiscordSocketClient discord,
         Store.Store store,
         IHttpClientFactory http,
+        FeedCatalog catalog,
         BotOptions options,
         ILogger<Sweeper> log)
     {
         _discord = discord;
         _store = store;
         _http = http;
+        _catalog = catalog;
         _options = options;
         _log = log;
     }
@@ -112,16 +115,19 @@ public sealed class Sweeper : BackgroundService
 
     private async Task SweepOneAsync(Subscription subscription, HttpClient http, CancellationToken ct)
     {
-        Category? category = Catalog.Find(subscription.CategoryKey);
+        Category? category = _catalog.Find(subscription.CategoryKey);
         if (category is null)
         {
-            _log.LogWarning("Subscription {Id} names unknown category '{Key}'.",
+            // The feed was removed from the settings file while a channel was still subscribed to
+            // it. Skipping is right — nothing can be fetched — and /merchant list shows the row as
+            // retired so somebody can clear it.
+            _log.LogWarning("Subscription {Id} names feed '{Key}', which is not in the catalog.",
                 subscription.Id, subscription.CategoryKey);
             return;
         }
 
         GuildSettings settings = _store.Settings(subscription.GuildId);
-        ISource source = Catalog.SourceFor(subscription.CategoryKey, http, settings);
+        ISource source = _catalog.SourceFor(subscription.CategoryKey, http, settings);
 
         IReadOnlyList<FeedItem> fetched = await source.FetchAsync(ct);
         if (fetched.Count == 0)

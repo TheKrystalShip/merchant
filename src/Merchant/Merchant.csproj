@@ -20,6 +20,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The catalog is data, so it ships as a file beside the binary rather than compiled in.
+         merchant copies it into the config directory on a first run and reads that copy from then
+         on: nothing in the assembly knows what a feed is. -->
+    <Content Include="../../deploy/appsettings.example.jsonc"
+             Link="appsettings.example.jsonc"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="Merchant.Tests" />
   </ItemGroup>
 

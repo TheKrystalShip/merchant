@@ -3,35 +3,6 @@ using Discord.Interactions;
 
 namespace Merchant.Discord;
 
-/// <summary>
-/// The feed menu, as Discord needs it: a compile-time enum, because slash-command choices are
-/// registered with Discord up front rather than resolved per invocation.
-/// <see cref="ToKey"/> is the single place this and <see cref="Catalog"/> are tied together, and
-/// a test asserts the two stay in step.
-/// </summary>
-public enum FeedChoice
-{
-    /// <summary>See <see cref="Catalog.TopOfTheWeek"/>.</summary>
-    [ChoiceDisplay("Top Games of the Week")]
-    TopOfTheWeek,
-
-    /// <summary>See <see cref="Catalog.UnderTen"/>.</summary>
-    [ChoiceDisplay("Games Under $10")]
-    UnderTen,
-
-    /// <summary>See <see cref="Catalog.BestDeals"/>.</summary>
-    [ChoiceDisplay("Best Game Deals")]
-    BestDeals,
-
-    /// <summary>See <see cref="Catalog.WorthPlaying"/>.</summary>
-    [ChoiceDisplay("Worth Checking Out")]
-    WorthPlaying,
-
-    /// <summary>See <see cref="Catalog.FreeGames"/>.</summary>
-    [ChoiceDisplay("Free Games & Giveaways")]
-    FreeGames,
-}
-
 /// <summary>How often the channel hears from merchant, with a default that suits the feed.</summary>
 public enum CadenceChoice
 {
@@ -55,17 +26,6 @@ public enum CadenceChoice
 /// <summary>Translates the command menus into catalog and domain values.</summary>
 public static class Choices
 {
-    /// <summary>The catalog key behind a menu selection.</summary>
-    public static string ToKey(this FeedChoice choice) => choice switch
-    {
-        FeedChoice.TopOfTheWeek => Catalog.TopOfTheWeek,
-        FeedChoice.UnderTen => Catalog.UnderTen,
-        FeedChoice.BestDeals => Catalog.BestDeals,
-        FeedChoice.WorthPlaying => Catalog.WorthPlaying,
-        FeedChoice.FreeGames => Catalog.FreeGames,
-        _ => throw new ArgumentOutOfRangeException(nameof(choice)),
-    };
-
     /// <summary>The cadence to store, resolving <see cref="CadenceChoice.Default"/> against the feed.</summary>
     public static Cadence Resolve(this CadenceChoice choice, Category category) => choice switch
     {
