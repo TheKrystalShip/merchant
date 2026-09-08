@@ -28,8 +28,9 @@ Sources ── ISource[]: RssSource (RSS 1.0 / RSS 2.0 / Atom), CheapSharkSource
     │      flatten everything to FeedItem; a dead feed returns empty, never throws
     │      config-blind: a source fetches, and does not know where its URL came from
     │
-Store ──── SQLite. subscriptions · guilds · seen                            Store/Store.cs
+Ledger ─── SQLite. subscriptions · guilds · seen                        Storage/Ledger.cs
     │      `seen` doubles as the digest buffer: posted = 0 means "waiting"
+    │      versioned: PRAGMA user_version, one migration per schema
     │
 Sweeper ── BackgroundService. Fetch everything on one interval,          Discord/Sweeper.cs
     │      post per subscription on its own cadence
@@ -85,12 +86,37 @@ that ends up *empty* is fatal: that bot is broken either way and should say so.
 keeps the one secret merchant holds out of a DI singleton every command can reach, and out of a file
 that gets copied around. A `bot.token` in the file is reported and ignored, never used.
 
+**The schema is a list of migrations, and the file says which it has had.** `Migrations` in
+`Ledger` is an ordered array; `PRAGMA user_version` records how far a database has been brought;
+opening one applies whatever is missing, one migration and one stamp per transaction. Changing the
+schema is appending an entry — never editing one that has shipped, because every database already
+carries its effects and only later entries will run. The first entry is written with IF NOT EXISTS
+so a database predating the stamp is adopted rather than rebuilt. A file from a *newer* merchant is
+refused at startup by name: the alternative is an older build meeting the change one query at a
+time, hours later, mid-sweep, with an error that names a column and explains nothing.
+`LedgerMigrationTests` covers adoption, the refusal, and that neither loses a row.
+
+**The ledger's default path is absolute, and it is the only default that is computed.** A relative
+default resolves against the working directory, so the same install reads a different database
+depending on where it was started — one under the unit, one in the checkout under `dotnet run` — and
+presents as a bot that has forgotten every subscription. `MerchantConfig.ResolveDatabasePath` puts it
+in the XDG state directory, next door to how the settings file is already found. The unit and the
+container still pass `MERCHANT_DB`, because each has to name the path it grants write access to.
+
+**Every level of the settings file is held to the schema, including its top.** `BotOptions.Load`
+runs `ConfigRead.Unknown` over the root before it reads anything, so a catalog under `"feed"` is
+named rather than producing a bot that starts, reports itself healthy and announces nothing. The
+`"logging"` section is recognised there without merchant reading it: the host does, which is what
+makes "turn the log up" an edit to the same file as everything else. `SettingsFileTests` pins that
+the level actually reaches the logger, because that instruction is the first thing anybody debugging
+a quiet channel is given.
+
 **The ledger is one connection, and every entry point takes the same gate.** Two callers reach
-`Store` without taking turns: the sweep on its background loop, and every slash command on the
+`Ledger` without taking turns: the sweep on its background loop, and every slash command on the
 gateway's threads. SQLite scopes a transaction to the connection rather than to the caller, so an
 ungated write from a command lands inside whatever transaction `Record` has open and is rolled back
 with it — `/merchant add` answers with a subscription number for a row that no longer exists.
-`StoreConcurrencyTests` reproduces exactly that. The operations are single-digit milliseconds; the
+`LedgerConcurrencyTests` reproduces exactly that. The operations are single-digit milliseconds; the
 contention costs nothing.
 
 **Dates are read against the invariant culture, never the host's.** This is the other half of
@@ -153,7 +179,7 @@ lists, so the application never needs intent review. Do not add an intent for a 
 
 **First sweep posts a handful and files the rest as seen.** A channel that stays empty for a day
 after setup reads as a broken bot; a channel that receives a month of backlog reads as a broken
-bot. `StoreTests` covers both edges.
+bot. `LedgerTests` covers both edges.
 
 **`/merchant add` checks channel permissions before it writes anything** and names what is missing. A
 silent permission failure is the most common way this class of bot appears broken, and the person
@@ -165,10 +191,18 @@ hitting it has no access to the logs.
 
 ```bash
 dotnet build
-dotnet test                                    # 142 tests, no network
+dotnet test                                       # no network: the feeds in them are captured files
+dotnet format                                     # the style in .editorconfig, applied
 dotnet run --project src/Merchant -- --check      # validate the settings file, fetch every feed
 dotnet run --project src/Merchant -- --check ES   # …for another region
 ```
+
+Nothing else is needed and nothing is bespoke: the repository is an ordinary .NET solution, and CI
+runs those same commands plus `docker build`. The style is `.editorconfig` rather than convention —
+explicit types over `var`, file-scoped namespaces, `_camelCase` instance fields and PascalCase for
+anything static and readonly — and `dotnet format --verify-no-changes` is what enforces it. The one
+place the formatter is overruled is the storefront table in `CheapSharkSource`, which is a table and
+is written as one.
 
 `--check` reads and validates the same settings file the bot does, so it is also how an edit gets
 checked. Point `MERCHANT_CONFIG` at a scratch file to try a catalog without touching the real one.
@@ -193,6 +227,12 @@ so the shipped example cannot drift from what the bot is meant to post. The rest
 every rejection names its feed and what was expected, because that message is the entire interface
 for somebody with a text editor and no access to this repository.
 
+`LedgerMigrationTests` is the only suite that starts from a database that already exists, which is
+the only interesting case: every other one opens an empty file, and an empty file cannot be migrated
+wrong. It builds the old database by hand rather than through `Ledger`, because a fixture written
+through the code under test agrees with it by construction — the same reason the parser fixtures are
+captured rather than hand-written.
+
 ## Adding a feed
 
 Edit `appsettings.json` and restart. No code, no rebuild, no command re-registration.
@@ -207,15 +247,58 @@ Adding a new *kind* of source is a class in `Feeds/Factories` implementing `ISou
 source definition that has already been validated — everything that can be wrong about a feed has
 been said out loud at startup, so nothing can fail for the first time during a sweep.
 
+## Changing the ledger's schema
+
+Append one entry to `Migrations` in `Storage/Ledger.cs`. That is the whole procedure: the array's
+length *is* the schema version, and a database that has had fewer runs the rest on the next start.
+
+```csharp
+private static readonly string[] Migrations =
+[
+    """ … the first schema … """,
+
+    // 2 — a channel can be muted without being removed.
+    """
+    ALTER TABLE subscriptions ADD COLUMN muted INTEGER NOT NULL DEFAULT 0;
+    """,
+];
+```
+
+Three rules, all of them about databases that are not yours:
+
+- **Never edit or renumber an entry that has shipped.** Every database already carries its effects
+  and will never run it again, so an edit only changes what a *fresh* install gets — which is how
+  two installs of the same version end up with different schemas.
+- **Every column added to an existing table needs a default**, or the migration fails on the rows
+  that are already there.
+- **Write it so it survives running against a database that has partly seen it.** The transaction
+  makes a whole migration atomic, so this mostly means not depending on state a previous migration
+  left in flight.
+
+Then add a case to `LedgerMigrationTests`: build the old shape by hand, put a row in it, open the
+`Ledger`, and assert the row is still there and reads correctly. Data surviving is the assertion
+that matters — a migration that runs cleanly and empties a table is the failure worth catching.
+
+Nothing needs to be run by hand on a deploy, and no operator step exists to forget. The one thing
+merchant will not do is go backwards: a file stamped past `SchemaVersion` is refused by name at
+startup.
+
 ## Deploying
 
-`deploy/install.sh` publishes to `~/.local/share/merchant` and installs the user unit; the token lives
-in `~/.config/merchant/merchant.env` at mode 0600 and never in git, and the catalog in
-`~/.config/merchant/appsettings.json` beside it. install.sh seeds both and overwrites neither, which
-matters because it republishes over the whole install directory — anything editable has to live
-outside it. The unit runs with `ProtectHome=read-only`, so the service can read that file but not
-seed it; the container can, and points `MERCHANT_CONFIG` at its volume. The `Dockerfile` is the portable
-half — same code, token passed at run time, ledger on a volume at `/data`.
+`deploy/install.sh` publishes to `~/.local/share/merchant`, links it into `~/.local/bin` and installs
+the user unit; the token lives in `~/.config/merchant/merchant.env` at mode 0600 and never in git, and
+the catalog in `~/.config/merchant/appsettings.json` beside it. install.sh seeds both and overwrites
+neither, which matters because it republishes over the whole install directory — anything editable has
+to live outside it. The unit runs with `ProtectHome=read-only`, so the service can read that file but
+not seed it; the container can, and points `MERCHANT_CONFIG` at its volume. The `Dockerfile` is the
+portable half — same code, token passed at run time, ledger on a volume at `/data`.
+
+The publish names no runtime identifier. A framework-dependent publish runs on whatever architecture
+the host is, and the friend running this may be on an arm64 box; the SDK floor that does matter is in
+`global.json`, where an old SDK is refused in a sentence rather than a resolver error.
+
+Upgrading is `git pull && deploy/install.sh && systemctl --user restart merchant`. The schema comes
+up on its own, the settings file and the ledger are untouched, and there is no step to remember.
 
 The ledger is the only state. Losing it makes merchant repost whatever each feed currently offers,
 once — annoying, not destructive.

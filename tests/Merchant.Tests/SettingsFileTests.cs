@@ -1,7 +1,10 @@
+using Discord;
 using Merchant.Discord;
 using Merchant.Feeds;
-using Discord;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Merchant.Tests;
@@ -75,7 +78,7 @@ public class SettingsFileTests
         BotOptions options = BotOptions.Load(Settings.Read("""{ "feeds": { } }"""), problems);
 
         Assert.Empty(problems);
-        Assert.Equal("merchant.db", options.DatabasePath);
+        Assert.Equal(MerchantConfig.ResolveDatabasePath(), options.DatabasePath);
         Assert.Equal(TimeSpan.FromMinutes(30), options.SweepInterval);
         Assert.Contains("merchant", options.UserAgent, StringComparison.Ordinal);
         Assert.Null(options.DevGuildId);
@@ -158,6 +161,64 @@ public class SettingsFileTests
             Environment.SetEnvironmentVariable("MERCHANT_DB", null);
             File.Delete(path);
         }
+    }
+
+    [Fact]
+    public void The_ledger_defaults_to_an_absolute_path_of_its_own()
+    {
+        // A relative default resolves against the working directory, which means a bot started
+        // from a different place quietly reads a different database and looks freshly installed.
+        string path = MerchantConfig.ResolveDatabasePath();
+
+        Assert.True(Path.IsPathRooted(path));
+        Assert.EndsWith(Schema.Defaults.DatabaseFileName, path, StringComparison.Ordinal);
+        Assert.Contains("merchant", path, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("""{ "feed": { }, "bot": { } }""", "feed")]
+    [InlineData("""{ "feeds": { }, "settings": { } }""", "settings")]
+    public void A_section_that_is_not_in_the_schema_is_named(string json, string expected)
+    {
+        // The one level that used to be read in silence. A catalog under "feed" starts a bot that
+        // announces nothing, and the reason is a single letter nothing else would ever mention.
+        List<string> problems = [];
+        BotOptions.Load(Settings.Read(json), problems);
+
+        Assert.Contains(problems, p => p.Contains(expected, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_sections_the_host_reads_are_not_reported_as_mistakes()
+    {
+        List<string> problems = [];
+        BotOptions.Load(Settings.Read("""
+            {
+              "bot": { },
+              "feeds": { },
+              "logging": { "logLevel": { "default": "Debug" } }
+            }
+            """), problems);
+
+        Assert.Empty(problems);
+    }
+
+    [Theory]
+    [InlineData("""{ }""", false)]
+    [InlineData("""{ "logging": { "logLevel": { "default": "Debug" } } }""", true)]
+    public void The_log_level_is_turned_up_from_the_settings_file(string json, bool verbose)
+    {
+        // Merchant reads no logging setting of its own: it hands the host its file and the host's
+        // own section does the rest. This pins that the wiring in Program.cs actually delivers it,
+        // because "edit this to see more" is the first thing anybody debugging is told.
+        HostApplicationBuilder builder = Host.CreateApplicationBuilder();
+        builder.Configuration.AddConfiguration(Settings.Read(json));
+
+        using IHost host = builder.Build();
+        ILogger logger = host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("merchant");
+
+        Assert.Equal(verbose, logger.IsEnabled(LogLevel.Debug));
+        Assert.True(logger.IsEnabled(LogLevel.Information));
     }
 }
 

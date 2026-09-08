@@ -1,5 +1,5 @@
-using Merchant.Feeds;
 using Discord.Interactions;
+using Merchant.Feeds;
 
 namespace Merchant.Discord;
 

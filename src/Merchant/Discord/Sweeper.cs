@@ -1,7 +1,8 @@
-using Merchant.Feeds;
-using Merchant.Sources;
 using Discord;
 using Discord.WebSocket;
+using Merchant.Feeds;
+using Merchant.Sources;
+using Merchant.Storage;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -30,7 +31,7 @@ public sealed class Sweeper : BackgroundService
     private const int DigestCeiling = 500;
 
     private readonly DiscordSocketClient _discord;
-    private readonly Store.Store _store;
+    private readonly Ledger _ledger;
     private readonly IHttpClientFactory _http;
     private readonly FeedCatalog _catalog;
     private readonly BotOptions _options;
@@ -39,14 +40,14 @@ public sealed class Sweeper : BackgroundService
     /// <summary>Wires the sweep to the gateway, the ledger and the network.</summary>
     public Sweeper(
         DiscordSocketClient discord,
-        Store.Store store,
+        Ledger ledger,
         IHttpClientFactory http,
         FeedCatalog catalog,
         BotOptions options,
         ILogger<Sweeper> log)
     {
         _discord = discord;
-        _store = store;
+        _ledger = ledger;
         _http = http;
         _catalog = catalog;
         _options = options;
@@ -82,7 +83,7 @@ public sealed class Sweeper : BackgroundService
     /// <summary>One pass over every subscription. Public so a test or a one-shot run can drive it.</summary>
     internal async Task SweepAsync(CancellationToken ct)
     {
-        IReadOnlyList<Subscription> subscriptions = _store.All();
+        IReadOnlyList<Subscription> subscriptions = _ledger.All();
         if (subscriptions.Count == 0)
         {
             return;
@@ -114,7 +115,7 @@ public sealed class Sweeper : BackgroundService
         _log.LogDebug("Fetched {Count} feed(s) for {Subscriptions} subscription(s).",
             fetched.Count, subscriptions.Count);
 
-        int pruned = _store.Prune(Retention);
+        int pruned = _ledger.Prune(Retention);
         if (pruned > 0)
         {
             _log.LogDebug("Pruned {Count} expired ledger row(s).", pruned);
@@ -138,7 +139,7 @@ public sealed class Sweeper : BackgroundService
             return;
         }
 
-        GuildSettings settings = _store.Settings(subscription.GuildId);
+        GuildSettings settings = _ledger.Settings(subscription.GuildId);
         Fetch slot = new(category.Key, settings.Region, settings.Currency);
 
         if (!fetched.TryGetValue(slot, out IReadOnlyList<FeedItem>? items))
@@ -153,17 +154,17 @@ public sealed class Sweeper : BackgroundService
             return;
         }
 
-        if (_store.IsUnswept(subscription.Id))
+        if (_ledger.IsUnswept(subscription.Id))
         {
             // First contact. The backlog is filed silently, but a handful goes out immediately:
             // a channel that stays empty for a day after setup reads as a bot that does not work.
             IReadOnlyList<FeedItem> opener = [.. items.Take(Announcer.LiveBurst)];
-            _store.Record(subscription.Id, opener, alreadyPosted: false);
-            _store.Record(subscription.Id, items.Skip(opener.Count), alreadyPosted: true);
+            _ledger.Record(subscription.Id, opener, alreadyPosted: false);
+            _ledger.Record(subscription.Id, items.Skip(opener.Count), alreadyPosted: true);
         }
         else
         {
-            int added = _store.Record(subscription.Id, items, alreadyPosted: false);
+            int added = _ledger.Record(subscription.Id, items, alreadyPosted: false);
             if (added > 0)
             {
                 _log.LogDebug("Subscription {Id}: {Count} new item(s).", subscription.Id, added);
@@ -196,7 +197,7 @@ public sealed class Sweeper : BackgroundService
 
     private async Task FlushAsync(Subscription subscription, Category category, CancellationToken ct)
     {
-        if (_store.PendingCount(subscription.Id) == 0)
+        if (_ledger.PendingCount(subscription.Id) == 0)
         {
             return;
         }
@@ -212,7 +213,7 @@ public sealed class Sweeper : BackgroundService
         // the whole backlog — it lists the first dozen and counts the remainder — so it takes all
         // of it and clears all of it.
         int limit = subscription.Cadence == Cadence.Live ? Announcer.LiveBurst : DigestCeiling;
-        IReadOnlyList<FeedItem> pending = _store.Pending(subscription.Id, limit);
+        IReadOnlyList<FeedItem> pending = _ledger.Pending(subscription.Id, limit);
 
         if (pending.Count == 0)
         {
@@ -248,7 +249,7 @@ public sealed class Sweeper : BackgroundService
             return;
         }
 
-        _store.MarkFlushed(subscription.Id, pending.Select(i => i.Id), DateTimeOffset.UtcNow);
+        _ledger.MarkFlushed(subscription.Id, pending.Select(i => i.Id), DateTimeOffset.UtcNow);
         _log.LogInformation("Posted {Count} item(s) to {Channel} for {Category}.",
             pending.Count, subscription.ChannelId, category.Key);
     }

@@ -44,6 +44,11 @@ public sealed class BotOptions
     /// <param name="problems">Appended to when a value cannot be read; the defaults stand.</param>
     public static BotOptions Load(IConfiguration config, ICollection<string> problems)
     {
+        // The top level, before the section: a file whose feeds are under "feed" parses, validates
+        // and starts a bot that announces nothing, and the reason is one letter that nothing else
+        // in this file would ever mention.
+        ConfigRead.Unknown(config, Schema.RootKeys, "the settings file", problems);
+
         IConfigurationSection bot = config.GetSection(Schema.Bot);
 
         ConfigRead.Unknown(
@@ -72,7 +77,7 @@ public sealed class BotOptions
         return new BotOptions
         {
             DatabasePath = ConfigRead.Optional(bot, Schema.BotKeys.DatabasePath)
-                ?? Schema.Defaults.DatabasePath,
+                ?? MerchantConfig.ResolveDatabasePath(),
             SweepInterval = TimeSpan.FromMinutes(minutes),
             UserAgent = ConfigRead.Optional(bot, Schema.BotKeys.UserAgent) ?? Schema.Defaults.UserAgent,
             DevGuildId = ReadGuild(bot, problems),

@@ -13,6 +13,16 @@ public static class Schema
     /// <summary>The catalog: one entry per feed, named by its key.</summary>
     public const string Feeds = "feeds";
 
+    /// <summary>
+    /// Log levels, read by the host rather than by merchant: <c>"logging": { "logLevel": {
+    /// "default": "Debug" } }</c>. Recognised here so the one section merchant does not read
+    /// itself is not reported as a mistake.
+    /// </summary>
+    public const string Logging = "logging";
+
+    /// <summary>The sections the file may hold at its top level.</summary>
+    public static readonly IReadOnlyList<string> RootKeys = [Bot, Feeds, Logging];
+
     /// <summary>Keys in the <see cref="Bot"/> section.</summary>
     public static class BotKeys
     {
@@ -80,7 +90,12 @@ public static class Schema
     /// <summary>What a setting means when it is left out.</summary>
     public static class Defaults
     {
-        public const string DatabasePath = "merchant.db";
+        /// <summary>
+        /// The ledger's file name. Where it sits is resolved rather than written down here:
+        /// <see cref="Merchant.MerchantConfig.ResolveDatabasePath"/>.
+        /// </summary>
+        public const string DatabaseFileName = "merchant.db";
+
         public const int SweepMinutes = 30;
 
         public const string UserAgent =

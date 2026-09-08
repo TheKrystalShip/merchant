@@ -1,6 +1,6 @@
-using Merchant.Feeds;
 using Discord;
 using Discord.Interactions;
+using Merchant.Feeds;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Merchant.Discord;

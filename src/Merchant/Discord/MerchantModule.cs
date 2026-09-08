@@ -1,15 +1,16 @@
 using System.Text;
-using Merchant.Feeds;
-using Merchant.Feeds.Factories;
-using Merchant.Sources;
 using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
+using Merchant.Feeds;
+using Merchant.Feeds.Factories;
+using Merchant.Sources;
+using Merchant.Storage;
 
 namespace Merchant.Discord;
 
 /// <summary>
-/// The whole configurable surface: five commands under <c>/merchant</c>.
+/// The whole configurable surface, under <c>/merchant</c>.
 ///
 /// The design rule throughout is that a command either succeeds or says exactly what to fix. The
 /// most common way a Discord feed bot appears broken is a silent permission failure in the target
@@ -29,14 +30,14 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
         (p => p.EmbedLinks, "Embed Links"),
     ];
 
-    private readonly Store.Store _store;
+    private readonly Ledger _ledger;
     private readonly IHttpClientFactory _http;
     private readonly FeedCatalog _catalog;
 
     /// <summary>Wires the commands to the ledger, the network and the configured catalog.</summary>
-    public MerchantModule(Store.Store store, IHttpClientFactory http, FeedCatalog catalog)
+    public MerchantModule(Ledger ledger, IHttpClientFactory http, FeedCatalog catalog)
     {
-        _store = store;
+        _ledger = ledger;
         _http = http;
         _catalog = catalog;
     }
@@ -74,7 +75,7 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
         }
 
         Cadence cadence = howOften.Resolve(category);
-        (long id, bool created) = _store.Subscribe(
+        (long id, bool created) = _ledger.Subscribe(
             GuildId, channel.Id, category.Key, cadence, ping?.Id);
 
         EmbedBuilder embed = new EmbedBuilder()
@@ -97,7 +98,7 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
     {
         await DeferAsync(ephemeral: true);
 
-        IReadOnlyList<Subscription> subscriptions = _store.ForGuild(GuildId);
+        IReadOnlyList<Subscription> subscriptions = _ledger.ForGuild(GuildId);
 
         if (subscriptions.Count == 0)
         {
@@ -133,7 +134,7 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
                 body.Append(" · pings ").Append(MentionUtils.MentionRole(role));
             }
 
-            int waiting = _store.PendingCount(subscription.Id);
+            int waiting = _ledger.PendingCount(subscription.Id);
             if (waiting > 0 && subscription.Cadence != Cadence.Live)
             {
                 body.Append(" · ").Append(waiting).Append(" waiting");
@@ -142,7 +143,7 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
             body.AppendLine();
         }
 
-        GuildSettings settings = _store.Settings(GuildId);
+        GuildSettings settings = _ledger.Settings(GuildId);
 
         await FollowupAsync(embed: new EmbedBuilder()
             .WithTitle("What merchant is announcing")
@@ -160,7 +161,7 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
     {
         await DeferAsync(ephemeral: true);
 
-        bool removed = _store.Unsubscribe(GuildId, id);
+        bool removed = _ledger.Unsubscribe(GuildId, id);
 
         await FollowupAsync(embed: removed
             ? new EmbedBuilder()
@@ -187,7 +188,7 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
             return;
         }
 
-        GuildSettings settings = _store.Settings(GuildId);
+        GuildSettings settings = _ledger.Settings(GuildId);
 
         ISource source = _catalog.SourceFor(
             category.Key, _http.CreateClient(BotOptions.HttpClientName), settings);
@@ -222,7 +223,7 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
         GuildSettings settings = new(
             GuildId, country.Trim().ToUpperInvariant(), currency.Trim().ToUpperInvariant());
 
-        _store.SaveSettings(settings);
+        _ledger.SaveSettings(settings);
 
         await FollowupAsync(embed: new EmbedBuilder()
             .WithTitle($"Prices now quoted for {settings.Region}")

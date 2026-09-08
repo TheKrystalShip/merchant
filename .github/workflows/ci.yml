@@ -1,0 +1,42 @@
+# What the repository asserts about itself on every push: it builds warning-free, it is formatted
+# the way .editorconfig says, its tests pass, and the container still builds. All of it runs
+# without network access to anything but nuget.org, because the tests touch no feeds.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Check formatting
+        run: dotnet format --verify-no-changes --no-restore
+
+      - name: Build
+        run: dotnet build -c Release --no-restore
+
+      - name: Test
+        run: dotnet test -c Release --no-build --verbosity normal
+
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The image is how somebody runs merchant without a .NET SDK, so a Dockerfile that no longer
+      # builds is a broken deploy path even when every test passes.
+      - name: Build the image
+        run: docker build -t merchant:ci .

@@ -1,7 +1,7 @@
+using Discord;
 using Merchant.Discord;
 using Merchant.Feeds;
 using Merchant.Sources;
-using Discord;
 using Xunit;
 
 namespace Merchant.Tests;

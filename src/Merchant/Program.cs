@@ -1,10 +1,11 @@
+using Discord;
+using Discord.Interactions;
+using Discord.WebSocket;
 using Merchant;
 using Merchant.Discord;
 using Merchant.Feeds;
 using Merchant.Feeds.Factories;
-using Discord;
-using Discord.Interactions;
-using Discord.WebSocket;
+using Merchant.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -77,6 +78,18 @@ if (string.IsNullOrWhiteSpace(token))
     return 1;
 }
 
+// Opened here rather than by the container, so a database this build cannot read is refused in a
+// sentence beside the other startup refusals instead of surfacing as a stack trace out of a hosted
+// service an hour later. Handed over as an instance, which makes disposing it this file's job: the
+// using below runs after the host's, so the sweep has stopped before the connection closes.
+if (Ledger.Open(options.DatabasePath, out string? ledgerProblem) is not { } opened)
+{
+    Console.Error.WriteLine(ledgerProblem);
+    return 1;
+}
+
+using Ledger ledger = opened;
+
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 
 // Added last so merchant's own file wins over anything the host picked up beside the binary.
@@ -84,10 +97,7 @@ builder.Configuration.AddConfiguration(config);
 
 builder.Services.AddSingleton(options);
 builder.Services.AddSingleton(catalog);
-// Built by the container rather than handed to it: a singleton the container did not create is a
-// singleton it will not dispose, and the ledger holds a SQLite connection with a write-ahead log to
-// check back in on the way out.
-builder.Services.AddSingleton(_ => new Merchant.Store.Store(options.DatabasePath));
+builder.Services.AddSingleton(ledger);
 
 // A driver is a class and a line here. Nothing else in the codebase names one, which is what keeps
 // the catalog in the settings file rather than spread across a switch and an enum.

@@ -134,10 +134,11 @@ public static class ConfigRead
             .Where(value => value.Length > 0)];
 
     /// <summary>
-    /// Reports settings that are not in the schema. A misspelled key is otherwise the worst mistake
-    /// this file can hold: it is ignored in silence, and the default left in its place looks
-    /// deliberate.
+    /// Reports settings that are not in the schema, at any level the file has — a section of it, or
+    /// the file itself. A misspelled key is otherwise the worst mistake this file can hold: it is
+    /// ignored in silence, and the default left in its place looks deliberate.
     /// </summary>
+    /// <param name="settings">The section, or the whole configuration.</param>
     /// <param name="known">Everything recognised here.</param>
     /// <param name="what">How the thing being read reads in a sentence, e.g. <c>a feed</c>.</param>
     /// <param name="errors">Appended to, one line per key.</param>
@@ -147,7 +148,7 @@ public static class ConfigRead
     /// </param>
     /// <returns>How many were reported.</returns>
     public static int Unknown(
-        IConfigurationSection section,
+        IConfiguration settings,
         IReadOnlyList<string> known,
         string what,
         ICollection<string> errors,
@@ -155,7 +156,7 @@ public static class ConfigRead
     {
         int found = 0;
 
-        foreach (IConfigurationSection child in section.GetChildren())
+        foreach (IConfigurationSection child in settings.GetChildren())
         {
             if (!known.Contains(child.Key, StringComparer.OrdinalIgnoreCase))
             {

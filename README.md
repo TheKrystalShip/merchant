@@ -63,8 +63,18 @@ as already seen, so a new channel proves it works without a month of history lan
 
 ## Running it
 
-Needs a Discord application: <https://discord.com/developers/applications> → **New Application** →
+Two things are needed before any of the below.
+
+**A Discord application:** <https://discord.com/developers/applications> → **New Application** →
 **Bot** → **Reset Token**. Merchant requests no privileged intents, so nothing there needs enabling.
+
+**.NET 10.** `deploy/install.sh` needs the SDK to build; the container needs nothing at all, because
+it builds and runs inside the image. The exact SDK floor is in `global.json`, and a machine with an
+older one says so rather than failing obscurely.
+
+```bash
+dotnet --version        # 10.0.100 or newer
+```
 
 Invite it with this URL, substituting the application id — the permissions integer is
 View Channels + Send Messages + Embed Links, and nothing else:
@@ -76,11 +86,16 @@ https://discord.com/api/oauth2/authorize?client_id=YOUR_APP_ID&permissions=19456
 ### On a host with systemd
 
 ```bash
-deploy/install.sh                          # publishes to ~/.local/share/merchant, installs the unit
-$EDITOR ~/.config/merchant/merchant.env          # put the token in
+deploy/install.sh                            # publishes, installs the unit, links merchant onto PATH
+$EDITOR ~/.config/merchant/merchant.env      # put the token in
 systemctl --user enable --now merchant
 journalctl --user -u merchant -f
 ```
+
+It is architecture-neutral — the same command installs on an arm64 box as on an x86-64 one — and
+re-runnable: an upgrade is `git pull && deploy/install.sh && systemctl --user restart merchant`. It
+seeds the token file and the settings file and overwrites neither, so an upgrade never touches the
+feeds or the ledger.
 
 ### As a container
 
@@ -103,14 +118,18 @@ It takes comments and trailing commas, and the copy merchant seeds is annotated 
 ```jsonc
 {
   "bot": {
-    "databasePath": "merchant.db",   // where the ledger lives
     "sweepMinutes": 30,              // how often every feed is fetched, 5–720
     "userAgent": "merchant/1.0 (…)"  // CheapShark rejects a generic one
+    // "databasePath": "…"           // default: ~/.local/state/merchant/merchant.db
     // "devGuildId": 123…            // register commands to one server; instant, vs an hour
   },
-  "feeds": { /* … */ }
+  "feeds": { /* … */ },
+  "logging": { "logLevel": { "default": "Debug" } }   // optional; read by the host
 }
 ```
+
+A key that is not in the schema is named at startup, at every level — including a section, so
+`"feed"` for `"feeds"` is caught rather than producing a bot that announces nothing.
 
 The **token is never read from this file** — it comes from `MERCHANT_TOKEN` and nowhere else, so the
 settings file can be copied around, pasted into a chat window or committed without leaking anything.
@@ -137,16 +156,94 @@ ok   under-10        20 items    680 ms  Games Under $10
      └ Suicide Squad: Kill the Justice League  $3.49 (-95%)
 ```
 
-## Development
+In a container, where there is no `merchant` on the path:
 
 ```bash
-dotnet test        # 142 tests, no network
+docker exec merchant dotnet /app/merchant.dll --check
+```
+
+To try an edit against a scratch file, without touching the one the bot is reading:
+
+```bash
+MERCHANT_CONFIG=/tmp/try.json merchant --check
+```
+
+### When a channel goes quiet
+
+In order, because each step rules out the one below it:
+
+```bash
+merchant --check                              # is the feed still answering?
+systemctl --user status merchant              # is the bot even running?
+journalctl --user -u merchant -n 50           # what did it say?
+```
+
+`/merchant list` reports how many items are waiting per channel, which separates "nothing new
+upstream" from "posting is stuck". If the answer is still not obvious, turn the log up — add
+`"logging": { "logLevel": { "default": "Debug" } }` to the settings file and restart. That reports
+every sweep, every fetch and every post, including the ones that decided to do nothing.
+
+A silent channel with everything else healthy is almost always a permission that was removed after
+`/merchant add` ran. Re-running `add` on the same channel re-checks them and names what is missing.
+
+## The ledger
+
+One SQLite file, and the only state merchant has: which channels want which feeds, and what each has
+already been shown. It lives at `~/.local/state/merchant/merchant.db`, or `/data/merchant.db` in the
+container — `databasePath` and `MERCHANT_DB` move it.
+
+```bash
+sqlite3 ~/.local/state/merchant/merchant.db 'SELECT * FROM subscriptions'
+cp ~/.local/state/merchant/merchant.db backup.db     # while stopped, or use: .backup
+```
+
+Losing it is annoying, not destructive: merchant reposts whatever each feed currently offers, once,
+and carries on. There is nothing in it worth protecting except the subscriptions, which are one
+`/merchant add` each to recreate.
+
+Posted items are forgotten after 60 days, so the file stays small on its own. Unposted ones are
+never pruned, however long a weekly channel has been waiting.
+
+**Upgrades bring the schema up on their own.** Merchant stamps a version into the file and applies
+whatever is missing when it starts, inside a transaction, so an interrupted upgrade leaves a version
+that was fully applied. Nothing has to be run by hand and no state is lost.
+
+Going *backwards* is the one case it refuses: a file written by a newer merchant is reported at
+startup rather than opened, because an older build would otherwise meet the change one query at a
+time, hours later, in the middle of a sweep.
+
+```
+Could not open the ledger at /home/…/merchant.db: its schema is version 3, and this merchant
+knows version 2. A newer merchant wrote it: upgrade this one, or point databasePath at a
+different file.
+```
+
+## Development
+
+Nothing here departs from an ordinary .NET repository: `build`, `test`, `format`, `publish`.
+
+```bash
+dotnet build
+dotnet test                                  # no network: every feed in them is a captured file
+dotnet format                                # the house style, enforced from .editorconfig
 dotnet run --project src/Merchant -- --check
 ```
+
+To run the bot itself against a real server, point it at one guild — commands registered to a guild
+appear immediately, where global ones take up to an hour:
+
+```bash
+MERCHANT_TOKEN=… MERCHANT_DEV_GUILD=… dotnet run --project src/Merchant
+```
+
+CI runs exactly the four commands above plus `docker build`, so a green local run is a green build.
 
 The parser tests run against captured documents from the three formats that actually arrive —
 Steam's RSS 1.0, IsThereAnyDeal's RSS 2.0 and Reddit's Atom — under `tests/Merchant.Tests/Fixtures`.
 Refresh them when a source changes shape.
+
+Changing the schema of the ledger, and adding a kind of source, are the two things that are not
+just an edit to a settings file: both are in `CLAUDE.md`.
 
 ## Editing the feeds
 

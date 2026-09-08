@@ -3,7 +3,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-COPY Directory.Build.props nuget.config ./
+COPY Directory.Build.props nuget.config global.json ./
 COPY src/Merchant/Merchant.csproj src/Merchant/
 RUN dotnet restore src/Merchant/Merchant.csproj
 

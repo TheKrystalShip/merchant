@@ -6,7 +6,11 @@
 # The token lives in ~/.config/merchant/merchant.env, mode 0600.
 # The feeds live in ~/.config/merchant/appsettings.json — edit it and restart to change them.
 # ProtectHome=read-only means the service cannot write that file, only read it; deploy/install.sh
-# puts it there. Delete it and run ~/.local/share/merchant/merchant --check to have it written back.
+# puts it there. Delete it and run `merchant --check` to have it written back.
+#
+# MERCHANT_DB names the same path merchant would resolve on its own. It is written out because
+# ReadWritePaths below has to grant exactly one directory, and a unit that grants a path it does
+# not name is a unit nobody can check.
 [Unit]
 Description=Merchant — game-deal announcements for Discord
 Documentation=https://github.com/TheKrystalShip/merchant

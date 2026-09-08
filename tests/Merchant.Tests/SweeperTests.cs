@@ -1,6 +1,6 @@
+using Discord.WebSocket;
 using Merchant.Discord;
 using Merchant.Feeds;
-using Discord.WebSocket;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -17,11 +17,11 @@ public class SweeperTests : IDisposable
     private readonly string _path = Path.Combine(
         Path.GetTempPath(), $"merchant-sweep-{Guid.NewGuid():N}.db");
 
-    private readonly Merchant.Store.Store _store;
+    private readonly Merchant.Storage.Ledger _ledger;
     private readonly CountingHandler _network = new();
     private readonly DiscordSocketClient _discord = new();
 
-    public SweeperTests() => _store = new Merchant.Store.Store(_path);
+    public SweeperTests() => _ledger = new Merchant.Storage.Ledger(_path);
 
     private Sweeper Build()
     {
@@ -39,7 +39,7 @@ public class SweeperTests : IDisposable
 
         return new Sweeper(
             _discord,
-            _store,
+            _ledger,
             new OneClient(_network),
             catalog,
             new BotOptions
@@ -55,24 +55,24 @@ public class SweeperTests : IDisposable
     public async Task Every_channel_waiting_on_one_feed_is_one_request()
     {
         // Two servers and three channels, all wanting the same feed in the same region.
-        _store.Subscribe(1, 10, "deals", Cadence.Daily, null);
-        _store.Subscribe(1, 11, "deals", Cadence.Daily, null);
-        _store.Subscribe(2, 20, "deals", Cadence.Weekly, null);
+        _ledger.Subscribe(1, 10, "deals", Cadence.Daily, null);
+        _ledger.Subscribe(1, 11, "deals", Cadence.Daily, null);
+        _ledger.Subscribe(2, 20, "deals", Cadence.Weekly, null);
 
         await Build().SweepAsync(CancellationToken.None);
 
         Assert.Equal(1, _network.Requests);
 
         // …and each of them still got the items filed against its own ledger.
-        Assert.All(_store.All(), s => Assert.True(_store.PendingCount(s.Id) > 0));
+        Assert.All(_ledger.All(), s => Assert.True(_ledger.PendingCount(s.Id) > 0));
     }
 
     [Fact]
     public async Task Two_regions_are_two_requests_because_they_are_two_urls()
     {
-        _store.Subscribe(1, 10, "deals", Cadence.Daily, null);
-        _store.Subscribe(2, 20, "deals", Cadence.Daily, null);
-        _store.SaveSettings(new GuildSettings(2, "ES", "EUR"));
+        _ledger.Subscribe(1, 10, "deals", Cadence.Daily, null);
+        _ledger.Subscribe(2, 20, "deals", Cadence.Daily, null);
+        _ledger.SaveSettings(new GuildSettings(2, "ES", "EUR"));
 
         await Build().SweepAsync(CancellationToken.None);
 
@@ -121,7 +121,7 @@ public class SweeperTests : IDisposable
 
     public void Dispose()
     {
-        _store.Dispose();
+        _ledger.Dispose();
         _discord.Dispose();
         _network.Dispose();
 

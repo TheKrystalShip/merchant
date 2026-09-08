@@ -45,12 +45,28 @@ public static class MerchantConfig
             return Path.GetFullPath(explicitPath);
         }
 
-        string home = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME") is { Length: > 0 } xdg
-            ? xdg
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config");
-
-        return Path.Combine(home, DirectoryName, FileName);
+        return Path.Combine(BaseDirectory("XDG_CONFIG_HOME", ".config"), DirectoryName, FileName);
     }
+
+    /// <summary>
+    /// Where the ledger lives when the settings file names no path of its own: the XDG state
+    /// directory, which is where a long-lived file a person never edits belongs.
+    ///
+    /// Absolute, deliberately. A relative default resolves against the working directory, so the
+    /// same install writes a different database depending on where it was started from — one
+    /// beside the binary under a unit, one in the checkout under <c>dotnet run</c>, and a bot that
+    /// has apparently forgotten every subscription.
+    /// </summary>
+    public static string ResolveDatabasePath() =>
+        Path.Combine(BaseDirectory("XDG_STATE_HOME", Path.Combine(".local", "state")),
+            DirectoryName, Schema.Defaults.DatabaseFileName);
+
+    /// <summary>One of the XDG base directories, falling back to its default place under home.</summary>
+    private static string BaseDirectory(string variable, string fallback) =>
+        Environment.GetEnvironmentVariable(variable) is { Length: > 0 } xdg
+            ? xdg
+            : Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), fallback);
 
     /// <summary>
     /// Writes the shipped example to <paramref name="path"/> when nothing is there. A first run

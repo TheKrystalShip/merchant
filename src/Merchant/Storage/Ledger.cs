@@ -1,8 +1,9 @@
 using System.Globalization;
 using System.Text.Json;
+using Merchant.Feeds;
 using Microsoft.Data.Sqlite;
 
-namespace Merchant.Store;
+namespace Merchant.Storage;
 
 /// <summary>
 /// Everything merchant remembers: which channels want which feeds, and every item it has already
@@ -20,13 +21,13 @@ namespace Merchant.Store;
 /// subscription that reports itself created and then does not exist. Every entry point below takes
 /// the same gate; the operations are single-digit milliseconds, so the contention costs nothing.
 /// </summary>
-public sealed class Store : IDisposable
+public sealed class Ledger : IDisposable
 {
     private readonly SqliteConnection _db;
     private readonly Lock _gate = new();
 
     /// <summary>Opens (creating if needed) the database at this path and brings the schema up.</summary>
-    public Store(string path)
+    public Ledger(string path)
     {
         string? directory = Path.GetDirectoryName(Path.GetFullPath(path));
         if (!string.IsNullOrEmpty(directory))
@@ -43,10 +44,48 @@ public sealed class Store : IDisposable
 
         _db.Open();
         Execute("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;");
-        EnsureSchema();
+        Migrate();
     }
 
-    private void EnsureSchema() => Execute("""
+    /// <summary>
+    /// Opens the ledger, answering in a sentence rather than an exception when it cannot. A person
+    /// whose bot will not start needs to read the reason, not a stack trace.
+    /// </summary>
+    /// <param name="path">Where the database is, or is to be created.</param>
+    /// <param name="problem">What stopped it, when the answer is null.</param>
+    /// <returns>The open ledger, or null.</returns>
+    public static Ledger? Open(string path, out string? problem)
+    {
+        try
+        {
+            problem = null;
+            return new Ledger(path);
+        }
+        catch (Exception ex)
+            when (ex is InvalidOperationException or SqliteException
+                     or IOException or UnauthorizedAccessException)
+        {
+            problem = $"Could not open the ledger at {path}: {ex.Message}";
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The schema, one entry per version, each applied in order to a database that has not had it.
+    ///
+    /// How far a database has been brought is stamped in its own header, as <c>PRAGMA
+    /// user_version</c>, so changing the schema is: append one entry here and ship. Never edit an
+    /// entry that has shipped — every database already carries its effects and only later entries
+    /// will run — and never renumber one.
+    ///
+    /// The first entry is written with IF NOT EXISTS because it is also what a database predating
+    /// the stamp meets: it finds its tables already there, is stamped, and carries on.
+    /// </summary>
+    private static readonly string[] Migrations =
+    [
+        // 1 — subscriptions, the per-server settings they are read with, and the seen ledger that
+        // doubles as the digest buffer.
+        """
         CREATE TABLE IF NOT EXISTS guilds (
             guild_id  INTEGER PRIMARY KEY,
             region    TEXT NOT NULL,
@@ -75,7 +114,53 @@ public sealed class Store : IDisposable
         );
 
         CREATE INDEX IF NOT EXISTS seen_pending ON seen (subscription_id, posted);
-        """);
+        """,
+    ];
+
+    /// <summary>The schema version this build of merchant writes and expects.</summary>
+    public static int SchemaVersion => Migrations.Length;
+
+    /// <summary>
+    /// Brings the database up to <see cref="SchemaVersion"/>, one migration and one stamp per
+    /// transaction, so an interrupted upgrade leaves the file at a version that was fully applied.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// The file was written by a newer merchant. Running an older build against it would meet
+    /// columns it does not know, one query at a time, hours after starting; saying so here is the
+    /// only point at which that is still one legible sentence.
+    /// </exception>
+    private void Migrate()
+    {
+        long version = ScalarLong("PRAGMA user_version") ?? 0;
+
+        if (version > Migrations.Length)
+        {
+            throw new InvalidOperationException(
+                $"its schema is version {version}, and this merchant knows version " +
+                $"{Migrations.Length}. A newer merchant wrote it: upgrade this one, or point " +
+                $"{Schema.BotKeys.DatabasePath} at a different file.");
+        }
+
+        for (int applied = (int)version; applied < Migrations.Length; applied++)
+        {
+            using SqliteTransaction tx = _db.BeginTransaction();
+
+            using (SqliteCommand step = Command(Migrations[applied]))
+            {
+                step.Transaction = tx;
+                step.ExecuteNonQuery();
+            }
+
+            // A pragma takes no parameters. The value is this loop's own counter, never input.
+            using (SqliteCommand stamp = Command($"PRAGMA user_version = {applied + 1};"))
+            {
+                stamp.Transaction = tx;
+                stamp.ExecuteNonQuery();
+            }
+
+            tx.Commit();
+        }
+    }
 
     // ---- guild settings -------------------------------------------------------------------
 

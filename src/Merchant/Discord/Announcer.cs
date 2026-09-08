@@ -1,6 +1,6 @@
 using System.Text;
-using Merchant.Feeds;
 using Discord;
+using Merchant.Feeds;
 
 namespace Merchant.Discord;
 
