@@ -1,6 +1,6 @@
 # What the repository asserts about itself on every push: it is formatted the way .editorconfig
 # says, it builds with the analyzers clean, its tests pass in English and in a locale that writes
-# numbers differently, the install script passes shellcheck, and the container still builds.
+# numbers differently, its shell scripts pass shellcheck, and the container still builds.
 #
 # Every one of these is a command a person can run locally, and none of them reaches the network
 # except to restore packages: the feeds in the tests are captured files.
@@ -71,9 +71,10 @@ jobs:
       - uses: actions/checkout@v4
 
       # install.sh is the deploy path for anyone not using the container, and it runs on a machine
-      # nobody here can see fail.
+      # nobody here can see fail. The scripts/ wrappers are checked with it: they are short, but a
+      # broken one is met by whoever has just cloned the repository.
       - name: shellcheck
-        run: shellcheck deploy/install.sh
+        run: shellcheck deploy/install.sh scripts/*.sh
 
   container:
     runs-on: ubuntu-latest

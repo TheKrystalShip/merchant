@@ -6,6 +6,9 @@
 //
 // Comments and trailing commas are allowed. Check an edit with:  merchant --check
 //
+// The schema below is the short version. The full one, with examples:
+// https://github.com/TheKrystalShip/merchant/blob/main/docs/feeds.md
+//
 // ── Schema ──────────────────────────────────────────────────────────────────────────────────
 //
 // "bot"                        every setting optional

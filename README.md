@@ -30,305 +30,81 @@ That is the entire setup.
 Each posts in its own colour, so channels read apart at a glance.
 
 Those five are what merchant ships with, not what it can do: the catalog is a settings file, so
-adding, changing or removing a feed is an edit and a restart. See
-[Configuration](#configuration).
+adding, changing or removing a feed is an edit and a restart — see [Feeds](docs/feeds.md).
 
 ## Commands
 
 Everything is under `/merchant`, and every reply is ephemeral — setup does not clutter the channel.
-The commands default to **Manage Server**; change that in _Server Settings → Integrations_.
 
 | Command             | What it does                                                            |
 | ------------------- | ----------------------------------------------------------------------- |
-| `/merchant add`     | Point a feed at a channel. Optionally set a cadence and a role to ping. |
-| `/merchant list`    | What is posting where, and how much is waiting.                         |
+| `/merchant add`     | Point a feed at a channel. Optionally set how often, and a role to ping. |
+| `/merchant list`    | What is posting where, and how much is waiting.                        |
 | `/merchant remove`  | Stop one feed, by the number `/merchant list` shows.                    |
 | `/merchant preview` | See what a feed would post, before wiring it up. Only you see it.       |
 | `/merchant region`  | Set the country and currency used for prices. Two letters and three.    |
 | `/merchant help`    | The catalog, with a suggested channel name for each feed.               |
 
-`/merchant add` checks that merchant can actually post in the target channel **before** it saves
-anything, and names the missing permission if it cannot. A feed bot that silently fails on a
-channel permission is the single most common way this kind of setup goes wrong.
+Full reference: [Commands](docs/commands.md).
 
-## Live and digest
+## Getting it running
 
-An ordinary RSS bot can only post on discovery, which makes "weekly" impossible. merchant separates
-the two: every feed is fetched on one interval, and each channel posts on its own clock from what
-the sweep filed. So a live channel gets each giveaway as it appears, and a weekly channel gets one
-digest listing the week — from the same machinery.
+You need a Discord application and its bot token — <https://discord.com/developers/applications> →
+**New Application** → **Bot** → **Reset Token**. Merchant requests no privileged intents, so nothing
+there needs enabling.
 
-The first sweep after `/merchant add` posts a handful straight away and files the rest of the backlog
-as already seen, so a new channel proves it works without a month of history landing in it.
-
-## Running it
-
-Two things are needed before any of the below.
-
-**A Discord application:** <https://discord.com/developers/applications> → **New Application** →
-**Bot** → **Reset Token**. Merchant requests no privileged intents, so nothing there needs enabling.
-
-**.NET 10.** `deploy/install.sh` needs the SDK to build; the container needs nothing at all, because
-it builds and runs inside the image. The exact SDK floor is in `global.json`, and a machine with an
-older one says so rather than failing obscurely.
-
-```bash
-dotnet --version        # 10.0.100 or newer
-```
-
-Invite it with this URL, substituting the application id — the permissions integer is
-View Channels + Send Messages + Embed Links, and nothing else:
-
-```
-https://discord.com/api/oauth2/authorize?client_id=YOUR_APP_ID&permissions=19456&scope=bot%20applications.commands
-```
-
-### On a host with systemd
+**On a host with systemd** (needs the .NET 10 SDK to build):
 
 ```bash
 deploy/install.sh                            # publishes, installs the unit, links merchant onto PATH
 $EDITOR ~/.config/merchant/merchant.env      # put the token in
 systemctl --user enable --now merchant
-journalctl --user -u merchant -f
 ```
 
-It is architecture-neutral — the same command installs on an arm64 box as on an x86-64 one — and
-re-runnable: an upgrade is `git pull && deploy/install.sh && systemctl --user restart merchant`. It
-seeds the token file and the settings file and overwrites neither, so an upgrade never touches the
-feeds or the ledger.
-
-### As a container
+**As a container** (needs nothing installed):
 
 ```bash
 docker build -t merchant .
-docker run -d --name merchant \
-  -e MERCHANT_TOKEN=... \
-  -v merchant-data:/data \
-  merchant
+docker run -d --name merchant -e MERCHANT_TOKEN=... -v merchant-data:/data merchant
 ```
 
-### Configuration
+Then run `/merchant add` in the server. The whole of it, including the invite URL and what the first
+hour looks like, is in [Setting it up](docs/setup.md).
 
-One file, `~/.config/merchant/appsettings.json` — or wherever `MERCHANT_CONFIG` points, which the
-container sets to `/data/appsettings.json`. If it is not there, merchant writes the shipped example
-to it on first run and uses that, so an empty volume still produces a working bot.
+When something looks wrong, `merchant --check` is the first thing to run: it validates the settings
+file and fetches every feed, needs no token, and touches no Discord.
 
-It takes comments and trailing commas, and the copy merchant seeds is annotated throughout.
+## Documentation
 
-```jsonc
-{
-  "bot": {
-    "sweepMinutes": 30,              // how often every feed is fetched, 5–720
-    "userAgent": "merchant/1.0 (…)"  // CheapShark rejects a generic one
-    // "databasePath": "…"           // default: ~/.local/state/merchant/merchant.db
-    // "devGuildId": 123…            // register commands to one server; instant, vs an hour
-  },
-  "feeds": { /* … */ },
-  "logging": { "logLevel": { "default": "Debug" } }   // optional; read by the host
-}
-```
+Everything longer than a paragraph is under [`docs/`](docs/README.md).
 
-A key that is not in the schema is named at startup, at every level — including a section, so
-`"feed"` for `"feeds"` is caught rather than producing a bot that announces nothing.
-
-The **token is never read from this file** — it comes from `MERCHANT_TOKEN` and nowhere else, so the
-settings file can be copied around, pasted into a chat window or committed without leaking anything.
-
-Every setting above can also come from the environment — `MERCHANT_DB`, `MERCHANT_SWEEP_MINUTES`,
-`MERCHANT_USER_AGENT`, `MERCHANT_DEV_GUILD` — which wins over the file. That is how the unit file
-and the container pass them.
-
-## Checking the feeds
-
-```bash
-merchant --check        # or: merchant --check ES
-```
-
-The country is two letters and nothing else; anything else is refused by name rather than fetched.
-
-Fetches every configured feed and reports counts, timings and the first item of each. It reads and
-checks the settings file first, so a mistake in an edit shows up here — named — rather than as a
-channel that quietly stops posting. Needs no token and touches no Discord, so it is also the first
-thing to run when a channel goes quiet.
-
-```
-ok   top-week         5 items    470 ms  Top Games of the Week
-     └ #1 - Counter-Strike 2
-ok   under-10        20 items    680 ms  Games Under $10
-     └ Suicide Squad: Kill the Justice League  $3.49 (-95%)
-```
-
-In a container, where there is no `merchant` on the path:
-
-```bash
-docker exec merchant dotnet /app/merchant.dll --check
-```
-
-To try an edit against a scratch file, without touching the one the bot is reading:
-
-```bash
-MERCHANT_CONFIG=/tmp/try.json merchant --check
-```
-
-### When a channel goes quiet
-
-In order, because each step rules out the one below it:
-
-```bash
-merchant --check                              # is the feed still answering?
-systemctl --user status merchant              # is the bot even running?
-journalctl --user -u merchant -n 50           # what did it say?
-```
-
-`/merchant list` reports how many items are waiting per channel, which separates "nothing new
-upstream" from "posting is stuck". If the answer is still not obvious, turn the log up — add
-`"logging": { "logLevel": { "default": "Debug" } }` to the settings file and restart. That reports
-every sweep, every fetch and every post, including the ones that decided to do nothing.
-
-A silent channel with everything else healthy is almost always a permission that was removed after
-`/merchant add` ran. Re-running `add` on the same channel re-checks them and names what is missing.
-
-If merchant is not running at all and the log ends on a `401 Unauthorized`, the token is wrong or
-has been reset — merchant stops rather than retrying one that cannot start working, so this shows
-up as a service that has failed rather than one that is quietly doing nothing. Resetting a bot's
-token at <https://discord.com/developers> invalidates the previous value.
-
-## The ledger
-
-One SQLite file, and the only state merchant has: which channels want which feeds, and what each has
-already been shown. It lives at `~/.local/state/merchant/merchant.db`, or `/data/merchant.db` in the
-container — `databasePath` and `MERCHANT_DB` move it.
-
-```bash
-sqlite3 ~/.local/state/merchant/merchant.db 'SELECT * FROM subscriptions'
-cp ~/.local/state/merchant/merchant.db backup.db     # while stopped, or use: .backup
-```
-
-Losing it is annoying, not destructive: merchant reposts whatever each feed currently offers, once,
-and carries on. There is nothing in it worth protecting except the subscriptions, which are one
-`/merchant add` each to recreate.
-
-Posted items are forgotten after 60 days, so the file stays small on its own. Unposted ones are
-never pruned, however long a weekly channel has been waiting.
-
-**Upgrades bring the schema up on their own.** Merchant stamps a version into the file and applies
-whatever is missing when it starts, inside a transaction, so an interrupted upgrade leaves a version
-that was fully applied. Nothing has to be run by hand and no state is lost.
-
-Going *backwards* is the one case it refuses: a file written by a newer merchant is reported at
-startup rather than opened, because an older build would otherwise meet the change one query at a
-time, hours later, in the middle of a sweep.
-
-```
-Could not open the ledger at /home/…/merchant.db: its schema is version 3, and this merchant
-knows version 2. A newer merchant wrote it: upgrade this one, or point databasePath at a
-different file.
-```
+| Document                                | What is in it                                                       |
+| --------------------------------------- | ------------------------------------------------------------------- |
+| [Setting it up](docs/setup.md)          | Discord application, invite, install, the first command, the first hour. |
+| [Commands](docs/commands.md)            | The six commands in full, and how live channels and digests differ. |
+| [Feeds](docs/feeds.md)                  | The catalog: adding, changing and parking feeds, and the source types. |
+| [Configuration](docs/configuration.md)  | The settings file, environment variables, the token, where files live. |
+| [Running it](docs/operations.md)        | `--check`, why a channel went quiet, the ledger, backups, upgrades.  |
+| [Deployment](docs/deployment.md)        | The systemd unit and the container in detail.                        |
+| [Development](docs/development.md)      | Build, test, format, style rules, CI, adding a source, schema changes. |
+| [Architecture](docs/architecture.md)    | What the pieces are and which parts are load-bearing.                |
 
 ## Development
 
-Nothing here departs from an ordinary .NET repository: `build`, `test`, `format`, `publish`.
+An ordinary .NET solution: `dotnet build`, `dotnet test`, `dotnet format`. The style and lint rules
+are `.editorconfig` and are enforced by the build rather than by review, and CI runs everything a
+person can run locally.
+
+`scripts/` wraps each of those in a line, if that is less typing:
 
 ```bash
-dotnet build                                 # analyzers and style rules run here, as errors
-dotnet format                                # apply the house style; --verify-no-changes checks it
-dotnet test                                  # no network: every feed in them is a captured file
-dotnet run --project src/Merchant -- --check
+scripts/build.sh
+scripts/test.sh
+scripts/format.sh
+scripts/run.sh --check      # everything after the name goes to merchant
 ```
 
-The style and the lint rules are `.editorconfig`, and both are enforced by the build rather than by
-review: `TreatWarningsAsErrors` plus `EnforceCodeStyleInBuild` means a violation fails `dotnet
-build`. Three analyzer rules are switched off, each with its reason written where it is switched
-off. An editor picks the same rules up on its own — `.vscode/` recommends the two extensions that
-do it, and any EditorConfig-aware editor needs nothing.
-
-To run the bot itself against a real server, point it at one guild — commands registered to a guild
-appear immediately, where global ones take up to an hour:
-
-```bash
-MERCHANT_TOKEN=… MERCHANT_DEV_GUILD=… dotnet run --project src/Merchant
-```
-
-CI runs `build`, `test` and `format`, plus a line-length check, `shellcheck deploy/install.sh`,
-`docker build`, and the test suite a second time under a comma-decimal locale — so a green local run
-is a green build. `--check` is the one command it does not run: it is the only one that reaches the
-network, and a feed having a quiet afternoon is not a broken commit.
-
-That last one is not ceremony. Merchant runs with globalization on, posts USD prices, and parses
-English feed dates, so anything formatted or parsed against the host's culture is a bug that only
-appears on somebody else's machine: an embed reading `$3,49`, or a feed whose dates the parser
-refuses. To reproduce one locally:
-
-```bash
-LC_ALL=de_DE.UTF-8 dotnet test
-```
-
-The parser tests run against captured documents from the three formats that actually arrive —
-Steam's RSS 1.0, IsThereAnyDeal's RSS 2.0 and Reddit's Atom — under `tests/Merchant.Tests/Fixtures`.
-Refresh them when a source changes shape.
-
-Changing the schema of the ledger, and adding a kind of source, are the two things that are not
-just an edit to a settings file: both are in `CLAUDE.md`.
-
-## Editing the feeds
-
-Everything merchant can post is in `~/.config/merchant/appsettings.json` under `"feeds"`. Edit it and
-restart — nothing is rebuilt, and the menu picks the change up on its own. The copy merchant seeds
-carries this same reference in its comments.
-
-```jsonc
-"indie-picks": {                          // the key: lower-case, hyphenated, max 100 chars
-  "label": "Indie Picks",
-  "description": "Small games worth a look.",
-  "cadence": "Daily",
-  "colour": "#8B5CF6",
-  "source": { "type": "rss", "urls": [ "https://example.test/indies.rss" ] }
-}
-```
-
-| Key           | Required | Value                | Default  | Meaning                                    |
-| ------------- | -------- | -------------------- | -------- | ------------------------------------------ |
-| `label`       | yes      | string, ≤ 100        | —        | Shown in the menu and on every embed.      |
-| `description` | yes      | string, ≤ 400        | —        | One line, in the menu and `/merchant help`. |
-| `source`      | yes      | object               | —        | Where the items come from — see below.     |
-| `channel`     | no       | string               | the key  | Suggested channel name.                    |
-| `cadence`     | no       | `Live`/`Daily`/`Weekly` | `Daily` | How often the channel hears from it.      |
-| `colour`      | no       | `"#RRGGBB"`          | `#5865F2` | Embed accent.                             |
-| `enabled`     | no       | `true`/`false`       | `true`   | `false` parks a feed without deleting it.  |
-
-The feed's key — `indie-picks` above — is what the ledger stores, so renaming one orphans the
-channels already subscribed to it.
-
-### Sources
-
-`"source": { "type": "rss", … }` — one or more syndication feeds, merged.
-
-| Key    | Required | Value                                     |
-| ------ | -------- | ----------------------------------------- |
-| `urls` | yes      | Array of one or more full http(s) addresses. RSS 1.0, RSS 2.0 and Atom all work without being told which. A URL may contain `{region}`, filled in per server from `/merchant region`. `{currency}` is filled in the same way and no feed needs it — neither source prices in anything but USD, so it is there for a source that one day does. |
-
-`"source": { "type": "cheapshark", … }` — a slice of CheapShark's deals API. Structured prices, so
-these embeds can strike through a list price. Always quoted in USD, whatever the region is set to.
-
-| Key             | Required | Value                | Default       |
-| --------------- | -------- | -------------------- | ------------- |
-| `upperPrice`    | no       | number above 0       | no ceiling    |
-| `minMetacritic` | no       | number, 0–100        | no floor      |
-| `sortBy`        | no       | `DealRating`, `Title`, `Savings`, `Price`, `Metacritic`, `Reviews`, `Release`, `Store` or `Recent`. Spaces are ignored, so `Deal Rating` reads the same. | `DealRating` |
-
-### After an edit
-
-```bash
-merchant --check        # validates the file, then fetches every feed
-```
-
-A feed with a mistake in it is dropped at startup with a line naming it and what was expected, and
-every other feed keeps running — one typo should not take a server's channels offline. A file with
-no usable feeds at all stops merchant rather than leaving it idling.
-
-A genuinely new *kind* of upstream — neither a syndication feed nor CheapShark — is the one thing
-that still needs code: an `ISourceFactory` in `src/Merchant/Feeds/Factories` and a line in
-`Program.cs`. Every feed built on a kind that already exists is config alone.
+[Development](docs/development.md) has the rest.
 
 ## Licence
 
