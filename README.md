@@ -223,11 +223,17 @@ different file.
 Nothing here departs from an ordinary .NET repository: `build`, `test`, `format`, `publish`.
 
 ```bash
-dotnet build
+dotnet build                                 # analyzers and style rules run here, as errors
+dotnet format                                # apply the house style; --verify-no-changes checks it
 dotnet test                                  # no network: every feed in them is a captured file
-dotnet format                                # the house style, enforced from .editorconfig
 dotnet run --project src/Merchant -- --check
 ```
+
+The style and the lint rules are `.editorconfig`, and both are enforced by the build rather than by
+review: `TreatWarningsAsErrors` plus `EnforceCodeStyleInBuild` means a violation fails `dotnet
+build`. Three analyzer rules are switched off, each with its reason written where it is switched
+off. An editor picks the same rules up on its own — `.vscode/` recommends the two extensions that
+do it, and any EditorConfig-aware editor needs nothing.
 
 To run the bot itself against a real server, point it at one guild — commands registered to a guild
 appear immediately, where global ones take up to an hour:
@@ -236,7 +242,17 @@ appear immediately, where global ones take up to an hour:
 MERCHANT_TOKEN=… MERCHANT_DEV_GUILD=… dotnet run --project src/Merchant
 ```
 
-CI runs exactly the four commands above plus `docker build`, so a green local run is a green build.
+CI runs exactly those commands, plus `shellcheck deploy/install.sh`, `docker build`, and the test
+suite a second time under a comma-decimal locale — so a green local run is a green build.
+
+That last one is not ceremony. Merchant runs with globalization on, posts USD prices, and parses
+English feed dates, so anything formatted or parsed against the host's culture is a bug that only
+appears on somebody else's machine: an embed reading `$3,49`, or a feed whose dates the parser
+refuses. To reproduce one locally:
+
+```bash
+LC_ALL=de_DE.UTF-8 dotnet test
+```
 
 The parser tests run against captured documents from the three formats that actually arrive —
 Steam's RSS 1.0, IsThereAnyDeal's RSS 2.0 and Reddit's Atom — under `tests/Merchant.Tests/Fixtures`.

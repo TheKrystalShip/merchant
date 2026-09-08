@@ -21,14 +21,14 @@ public sealed class FeedAutocomplete : AutocompleteHandler
     /// <inheritdoc />
     public override Task<AutocompletionResult> GenerateSuggestionsAsync(
         IInteractionContext context,
-        IAutocompleteInteraction interaction,
+        IAutocompleteInteraction autocompleteInteraction,
         IParameterInfo parameter,
         IServiceProvider services)
     {
         FeedCatalog catalog = services.GetRequiredService<FeedCatalog>();
 
         return Task.FromResult(AutocompletionResult.FromSuccess(
-            Suggest(catalog, interaction.Data.Current.Value as string ?? string.Empty)));
+            Suggest(catalog, autocompleteInteraction.Data.Current.Value as string ?? string.Empty)));
     }
 
     /// <summary>

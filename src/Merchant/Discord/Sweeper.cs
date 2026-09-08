@@ -55,12 +55,12 @@ public sealed class Sweeper : BackgroundService
     }
 
     /// <inheritdoc />
-    protected override async Task ExecuteAsync(CancellationToken ct)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // Nothing can be posted before the gateway hands over the guild and channel caches.
-        while (!ct.IsCancellationRequested && _discord.ConnectionState != ConnectionState.Connected)
+        while (!stoppingToken.IsCancellationRequested && _discord.ConnectionState != ConnectionState.Connected)
         {
-            await Task.Delay(TimeSpan.FromSeconds(2), ct);
+            await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
         }
 
         using PeriodicTimer timer = new(_options.SweepInterval);
@@ -69,15 +69,15 @@ public sealed class Sweeper : BackgroundService
         {
             try
             {
-                await SweepAsync(ct);
+                await SweepAsync(stoppingToken);
             }
-            catch (Exception ex) when (!ct.IsCancellationRequested)
+            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
                 // One bad sweep must not end the loop; the next one is a few minutes away.
                 _log.LogError(ex, "Sweep failed.");
             }
         }
-        while (await timer.WaitForNextTickAsync(ct));
+        while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
     /// <summary>One pass over every subscription. Public so a test or a one-shot run can drive it.</summary>

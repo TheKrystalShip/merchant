@@ -81,8 +81,36 @@ dotnet_naming_style.pascal.capitalization = pascal_case
 dotnet_naming_style.underscore_camel.capitalization = camel_case
 dotnet_naming_style.underscore_camel.required_prefix = _
 
+# ---- analyzers ---------------------------------------------------------------------------------
+# The .NET analyzers run at build (EnforceCodeStyleInBuild, AnalysisLevel in Directory.Build.props)
+# and TreatWarningsAsErrors makes each one a build failure. Everything they report is fixed rather
+# than muted, except these three, each declined for a stated reason.
+
+# Use LoggerMessage delegates. A perf rule for logging in a hot path; merchant logs a handful of
+# lines per sweep, thirty minutes apart. Adopting it would put every log line behind a generated
+# partial and buy nothing measurable.
+dotnet_diagnostic.CA1848.severity = none
+
+# Evaluation of a log argument may be expensive. The companion to the above, and it fires on the
+# same call sites for the same reason: the arguments here are a list count and a snowflake.
+dotnet_diagnostic.CA1873.severity = none
+
+# Identifier contains a type name. ConfigRead reads one setting per method and is named for what it
+# reads — Int, Decimal, Bool, Enum, Colour, Strings. That is the point of the type, and Integer or
+# Number would only be further from what the caller is asking for.
+dotnet_diagnostic.CA1720.severity = none
+
 # ---- documentation -----------------------------------------------------------------------------
 # Public members carry an XML doc saying why, not what. Kept at suggestion: the compiler's own
 # CS1591 would be an error here (TreatWarningsAsErrors), and a missing doc is a review note.
 
 dotnet_diagnostic.CS1591.severity = suggestion
+
+# ---- tests -------------------------------------------------------------------------------------
+
+[tests/**.cs]
+# A test is named as the sentence it asserts — Subscribing_twice_updates_rather_than_duplicates —
+# because the runner's output is then a list of the things merchant is known to do. That reads
+# better than any PascalCase spelling of the same words, and the rule exists for public API surface
+# a caller has to type, which a test method is not.
+dotnet_diagnostic.CA1707.severity = none

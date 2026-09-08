@@ -1,6 +1,9 @@
-# What the repository asserts about itself on every push: it builds warning-free, it is formatted
-# the way .editorconfig says, its tests pass, and the container still builds. All of it runs
-# without network access to anything but nuget.org, because the tests touch no feeds.
+# What the repository asserts about itself on every push: it is formatted the way .editorconfig
+# says, it builds with the analyzers clean, its tests pass in English and in a locale that writes
+# numbers differently, the install script passes shellcheck, and the container still builds.
+#
+# Every one of these is a command a person can run locally, and none of them reaches the network
+# except to restore packages: the feeds in the tests are captured files.
 name: CI
 
 on:
@@ -30,6 +33,26 @@ jobs:
 
       - name: Test
         run: dotnet test -c Release --no-build --verbosity normal
+
+      # The same suite under a comma-decimal locale. Merchant runs with globalization on and posts
+      # USD prices and English feed dates, so anything it formats or parses against the host's
+      # culture is a bug that only appears on somebody else's machine: "$3,49" in an embed, or a
+      # date the parser refuses. Running it here is how that stays caught.
+      - name: Test under a non-English locale
+        env:
+          LANG: de_DE.UTF-8
+          LC_ALL: de_DE.UTF-8
+        run: dotnet test -c Release --no-build
+
+  lint-shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # install.sh is the deploy path for anyone not using the container, and it runs on a machine
+      # nobody here can see fail.
+      - name: shellcheck
+        run: shellcheck deploy/install.sh
 
   container:
     runs-on: ubuntu-latest

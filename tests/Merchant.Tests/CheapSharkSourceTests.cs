@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using Merchant.Sources;
 using Xunit;
@@ -10,7 +11,8 @@ namespace Merchant.Tests;
 /// </summary>
 public class CheapSharkSourceTests
 {
-    private static CheapSharkSource Source(string body) =>
+    /// <summary>The source over a captured response. Shared with the globalization suite.</summary>
+    internal static CheapSharkSource Source(string body) =>
         new(new HttpClient(new CannedHandler(body)), upperPrice: 10, minMetacritic: null,
             sortBy: "Deal Rating");
 
@@ -38,7 +40,10 @@ public class CheapSharkSourceTests
         Assert.All(items, item =>
         {
             Assert.NotNull(item.Price);
-            Assert.True(decimal.Parse(item.Price!.TrimStart('$')) <= 10m,
+            // The price merchant renders is invariant, so the test that reads it back has to be:
+            // under a comma-decimal locale, parsing with the current culture reads $3.49 as 349.
+            Assert.True(
+                decimal.Parse(item.Price!.TrimStart('$'), CultureInfo.InvariantCulture) <= 10m,
                 $"{item.Title} is priced {item.Price}, above the ceiling requested.");
         });
     }

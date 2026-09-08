@@ -106,12 +106,20 @@ public sealed class CheapSharkSource : ISource
             Summary: SteamVerdict(deal),
             ImageUrl: Links.Http(Text(deal, "thumb")),
             Published: Released(deal),
-            Price: sale is { } p ? $"${p:0.00}" : null,
-            WasPrice: normal is { } w ? $"${w:0.00}" : null,
+            Price: sale is { } p ? Priced(p) : null,
+            WasPrice: normal is { } w ? Priced(w) : null,
             DiscountPercent: savings is > 0 ? savings : null,
             Store: storeId is not null && Stores.TryGetValue(storeId, out string? name) ? name : null,
             Score: Number(deal, "metacriticScore") is > 0 and var m ? m : null);
     }
+
+    /// <summary>
+    /// A price as the embed shows it. Invariant, because the host's culture has no business in it:
+    /// CheapShark quotes USD whatever the region is set to, and under a comma-decimal locale the
+    /// same deal otherwise reads "$3,49" — which is not what that number means anywhere.
+    /// </summary>
+    private static string Priced(decimal amount) =>
+        string.Create(CultureInfo.InvariantCulture, $"${amount:0.00}");
 
     /// <summary>The Steam review verdict, e.g. <c>Very Positive — 94% of 12,431 reviews</c>.</summary>
     private static string? SteamVerdict(JsonElement deal)
@@ -125,9 +133,12 @@ public sealed class CheapSharkSource : ISource
             return null;
         }
 
+        // Invariant for the same reason as the price: the group separator and the digits are both
+        // the current culture's otherwise, so a German host reads "7.716 reviews" and a Persian one
+        // writes the count in Eastern Arabic numerals.
         return count is > 0
-            ? $"{verdict} — {percent}% of {count:N0} reviews"
-            : $"{verdict} — {percent}%";
+            ? string.Create(CultureInfo.InvariantCulture, $"{verdict} — {percent}% of {count:N0} reviews")
+            : string.Create(CultureInfo.InvariantCulture, $"{verdict} — {percent}%");
     }
 
     /// <summary>Release date, which CheapShark sends as a Unix timestamp of 0 when unknown.</summary>

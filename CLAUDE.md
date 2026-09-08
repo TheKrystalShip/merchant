@@ -119,11 +119,19 @@ with it — `/merchant add` answers with a subscription number for a row that no
 `LedgerConcurrencyTests` reproduces exactly that. The operations are single-digit milliseconds; the
 contention costs nothing.
 
-**Dates are read against the invariant culture, never the host's.** This is the other half of
-keeping globalization on. A feed writes English month names on a Gregorian calendar whatever locale
-the machine has; under `fa-IR` or `th-TH` the current culture refuses those strings or reads them
-six centuries out, and the item silently loses its place in every digest. `GlobalizationTests`
-pins it for both, along with the ledger's own timestamps.
+**Every number and date crossing merchant's edge is invariant, never the host's culture.** This is
+the other half of keeping globalization on, and it cuts both ways. Reading: a feed writes English
+month names on a Gregorian calendar whatever locale the machine has, and under `fa-IR` or `th-TH`
+the current culture refuses those strings or reads them six centuries out, so the item silently
+loses its place in every digest. Writing: CheapShark quotes USD whatever region a server picks, and
+a price formatted in the host's convention is a different number — `$3,49` on a German host, in
+Eastern Arabic digits on a Persian one, in an embed read by people who have never seen that host.
+
+So a price goes through `CheapSharkSource.Priced`, a review count and a score name the invariant
+culture explicitly, and the ledger's timestamps are written and read with it. `GlobalizationTests`
+pins dates and prices across several locales, and CI runs the whole suite a second time under
+`de_DE.UTF-8`. The analyzers help but do not cover this: CA1305 catches a bare `ToString()` and
+does not see inside an interpolated string, which is exactly where the prices were.
 
 **A source hands out absolute http(s) links and nothing else.** Discord validates a URL while the
 embed is being *built*, so a junk link throws inside the sweep: the item is never marked sent, the
@@ -198,11 +206,32 @@ dotnet run --project src/Merchant -- --check ES   # …for another region
 ```
 
 Nothing else is needed and nothing is bespoke: the repository is an ordinary .NET solution, and CI
-runs those same commands plus `docker build`. The style is `.editorconfig` rather than convention —
-explicit types over `var`, file-scoped namespaces, `_camelCase` instance fields and PascalCase for
-anything static and readonly — and `dotnet format --verify-no-changes` is what enforces it. The one
-place the formatter is overruled is the storefront table in `CheapSharkSource`, which is a table and
-is written as one.
+runs those same commands plus `shellcheck`, `docker build`, and the tests again under a
+comma-decimal locale.
+
+**The style and the lint rules are the build's job, not review's.** `.editorconfig` holds both —
+explicit types over `var`, file-scoped namespaces, `_camelCase` instance fields, PascalCase for
+anything static and readonly — and `Directory.Build.props` turns on `EnforceCodeStyleInBuild` and
+the .NET analyzers at `latest-Recommended`, on top of `TreatWarningsAsErrors`. A violation is a
+failed build, on the machine that made it.
+
+Everything the analyzers report is fixed rather than muted, with three exceptions, each switched
+off beside its reason in `.editorconfig`: CA1848 and CA1873 want `LoggerMessage` delegates for
+logging that happens a few times per half-hour, and CA1720 objects to `ConfigRead.Int`/`Decimal`
+being named after what they read, which is the point of them. CA1707 is off for `tests/` alone,
+because a test is named as the sentence it asserts. When a new rule fires, fix it or turn it off
+with the reason written down — never turn it off silently, and never lower `AnalysisLevel` to make
+one go away.
+
+The one place the formatter is overruled is the storefront table in `CheapSharkSource`, which is a
+table and is written as one; `#pragma warning disable format` is what holds it.
+
+**The test suite runs twice in CI, the second time under `LC_ALL=de_DE.UTF-8`.** With globalization
+on, everything merchant formats or parses can pick up the host's culture, and the result is wrong
+only on machines nobody here owns — a USD price posted as `$3,49`, a review count as `7.716`, an
+English feed date the parser refuses. The analyzers catch some of it (CA1305) but not interpolated
+strings, which is exactly where the prices were; the locale run is what covers the rest.
+`GlobalizationTests` pins dates and prices across `de-DE`, `es-ES` and `fa-IR` directly.
 
 `--check` reads and validates the same settings file the bot does, so it is also how an edit gets
 checked. Point `MERCHANT_CONFIG` at a scratch file to try a catalog without touching the real one.

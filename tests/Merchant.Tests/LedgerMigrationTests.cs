@@ -1,3 +1,4 @@
+using System.Globalization;
 using Merchant.Storage;
 using Microsoft.Data.Sqlite;
 using Xunit;
@@ -27,7 +28,7 @@ public class LedgerMigrationTests : IDisposable
         db.Open();
         using SqliteCommand cmd = db.CreateCommand();
         cmd.CommandText = $"PRAGMA {name};";
-        return Convert.ToInt64(cmd.ExecuteScalar());
+        return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
     /// <summary>Writes a database stamped at a version, with whatever schema is asked for.</summary>

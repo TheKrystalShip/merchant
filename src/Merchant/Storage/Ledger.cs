@@ -261,7 +261,7 @@ public sealed class Ledger : IDisposable
         }
     }
 
-    private IReadOnlyList<Subscription> ReadSubscriptions(
+    private List<Subscription> ReadSubscriptions(
         string tail, params (string Name, object? Value)[] parameters)
     {
         using SqliteCommand cmd = Command(
@@ -436,7 +436,7 @@ public sealed class Ledger : IDisposable
     // ---- plumbing -------------------------------------------------------------------------
 
     /// <summary>A snowflake boxed for SQLite, where "no role" has to travel as a null.</summary>
-    private static object? NullableId(ulong? id) => id is { } value ? (long)value : null;
+    private static object NullableId(ulong? id) => id is { } value ? (long)value : DBNull.Value;
 
     /// <summary>
     /// How a time is written and read back. Both ends name the invariant culture: merchant runs
@@ -469,7 +469,7 @@ public sealed class Ledger : IDisposable
     {
         using SqliteCommand cmd = Command(sql, parameters);
         object? value = cmd.ExecuteScalar();
-        return value is null or DBNull ? null : Convert.ToInt64(value);
+        return value is null or DBNull ? null : Convert.ToInt64(value, CultureInfo.InvariantCulture);
     }
 
     /// <inheritdoc />

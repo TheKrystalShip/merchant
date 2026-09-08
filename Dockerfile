@@ -3,7 +3,10 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-COPY Directory.Build.props nuget.config global.json ./
+# .editorconfig comes along because the analyzers and style rules run as part of the build: without
+# it the image builds against different rules than anybody else does, and warnings-as-errors turns
+# that difference into a failure nobody can reproduce outside Docker.
+COPY Directory.Build.props nuget.config global.json .editorconfig ./
 COPY src/Merchant/Merchant.csproj src/Merchant/
 RUN dotnet restore src/Merchant/Merchant.csproj
 

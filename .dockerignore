@@ -9,3 +9,5 @@
 *.db-wal
 .env
 tests/
+.github/
+.vscode/

@@ -5,6 +5,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- The linter. The .NET analyzers and the code-style rules both run as part of the build, so
+         a violation is a failed build here rather than a review note later; .editorconfig holds
+         the rules, including the three that are switched off and why. -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-Recommended</AnalysisLevel>
     <!-- Must stay false. Discord.Net builds a CultureInfo from each guild's preferred_locale
          while handling GUILD_CREATE; under invariant globalization that throws, the guild never
          enters the client's cache, and every command then fails on a null Context.Guild. -->

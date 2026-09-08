@@ -1,4 +1,5 @@
 using System.Globalization;
+using Merchant.Sources;
 using Xunit;
 
 namespace Merchant.Tests;
@@ -58,6 +59,43 @@ public class GlobalizationTests
             Assert.Equal(
                 new DateTimeOffset(2026, 9, 8, 10, 0, 0, TimeSpan.Zero),
                 item.Published!.Value.ToUniversalTime());
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
+        }
+    }
+
+    [Theory]
+    [InlineData("de-DE")]   // comma for the decimal point, dot for the group separator
+    [InlineData("es-ES")]
+    [InlineData("fa-IR")]   // Eastern Arabic digits
+    [InlineData("en-US")]
+    public async Task A_price_reads_the_same_whatever_the_host_locale_is(string locale)
+    {
+        // What merchant posts is a USD price, and a number written in the host's own convention is
+        // simply a different number: under de-DE the same deal reads "$3,49". Nobody setting this
+        // bot up ever sees the host's locale, so the output cannot depend on it.
+        CultureInfo original = CultureInfo.CurrentCulture;
+
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo(locale);
+
+            IReadOnlyList<FeedItem> items = await CheapSharkSourceTests
+                .Source(Fixtures.Read(Fixtures.CheapSharkDeals))
+                .FetchAsync(CancellationToken.None);
+
+            Assert.All(items, item =>
+            {
+                Assert.Matches(@"^\$[0-9]+\.[0-9]{2}$", item.Price);
+
+                if (item.Summary is { Length: > 0 } summary)
+                {
+                    Assert.DoesNotContain(',', summary.Split('%')[0]);
+                    Assert.Matches("^[^0-9]*[0-9]", summary);
+                }
+            });
         }
         finally
         {

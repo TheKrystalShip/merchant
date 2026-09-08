@@ -1,0 +1,21 @@
+{
+  // Formatting on save, from .editorconfig, so the formatter is never a separate step to remember
+  // and a diff never carries whitespace nobody chose.
+  "editor.formatOnSave": true,
+  "editor.trimAutoWhitespace": true,
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+
+  // The analyzers and the style rules, reported in the editor as the build reports them.
+  "dotnet.enableRoslynAnalyzers": true,
+  "omnisharp.enableEditorConfigSupport": true,
+  "omnisharp.enableRoslynAnalyzers": true,
+
+  // The one line where 110 characters is the house limit; the rest of the style is .editorconfig's.
+  "editor.rulers": [110],
+
+  "[csharp]": {
+    "editor.defaultFormatter": "ms-dotnettools.csharp",
+    "editor.codeActionsOnSave": { "source.organizeImports": "explicit" }
+  }
+}

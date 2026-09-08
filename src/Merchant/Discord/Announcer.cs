@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Discord;
 using Merchant.Feeds;
@@ -92,7 +93,10 @@ public static class Announcer
 
         if (item.Score is { } score)
         {
-            embed.AddField("Metacritic", score.ToString(), inline: true);
+            // Invariant, like every other number and date merchant renders: the host's culture
+            // decides the digits otherwise, and a score reads as Eastern Arabic under fa-IR.
+            embed.AddField(
+                "Metacritic", score.ToString(CultureInfo.InvariantCulture), inline: true);
         }
 
         if (item.Published is { } when)
