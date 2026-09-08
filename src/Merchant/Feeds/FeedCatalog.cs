@@ -92,6 +92,12 @@ public sealed partial class FeedCatalog
             {
                 problems.Add("the name of a feed should be lower-case words joined by hyphens, like free-games.");
             }
+            else if (key.Length > 100)
+            {
+                // The key is the value the menu sends back, and Discord rejects the whole
+                // autocomplete response when one is longer than this.
+                problems.Add("the name of a feed cannot be longer than 100 characters.");
+            }
 
             string? label = ConfigRead.Required(entry, "label", problems);
             string? description = ConfigRead.Required(entry, "description", problems);

@@ -232,6 +232,22 @@ public class FeedCatalogTests
     }
 
     [Fact]
+    public void A_feed_name_too_long_for_the_menu_is_rejected()
+    {
+        // Discord rejects the whole autocomplete response when one value is over 100 characters,
+        // which would take the menu down for every feed rather than just this one.
+        string overlong = new('a', 101);
+
+        Settings.From($$"""
+            { "feeds": { "{{overlong}}": {
+                "label": "L", "description": "D",
+                "source": { "type": "rss", "urls": [ "https://e.test/f" ] } } } }
+            """, out CatalogReport report);
+
+        Assert.Contains("100 characters", Assert.Single(report.Errors), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void A_settings_file_with_no_feeds_is_empty_rather_than_broken()
     {
         FeedCatalog catalog = Settings.From("""{ "bot": { "sweepMinutes": 30 } }""", out CatalogReport report);

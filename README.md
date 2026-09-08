@@ -140,7 +140,7 @@ ok   under-10        20 items    680 ms  Games Under $10
 ## Development
 
 ```bash
-dotnet test        # 113 tests, no network
+dotnet test        # 114 tests, no network
 dotnet run --project src/Merchant -- --check
 ```
 
@@ -148,42 +148,65 @@ The parser tests run against captured documents from the three formats that actu
 Steam's RSS 1.0, IsThereAnyDeal's RSS 2.0 and Reddit's Atom — under `tests/Merchant.Tests/Fixtures`.
 Refresh them when a source changes shape.
 
-## Adding a feed
+## Editing the feeds
 
-Edit `~/.config/merchant/appsettings.json` and restart. Nothing is rebuilt, and the menu picks the
-new feed up on its own — the feed list is resolved when somebody opens it, not registered with
-Discord in advance.
+Everything merchant can post is in `~/.config/merchant/appsettings.json` under `"feeds"`. Edit it and
+restart — nothing is rebuilt, and the menu picks the change up on its own. The copy merchant seeds
+carries this same reference in its comments.
 
 ```jsonc
-"indie-picks": {
-  "label": "Indie Picks",              // what the menu and the embeds show
+"indie-picks": {                          // the key: lower-case, hyphenated, max 100 chars
+  "label": "Indie Picks",
   "description": "Small games worth a look.",
-  "channel": "indie-picks",            // suggested channel name; defaults to the key
-  "cadence": "Daily",                  // Live, Daily or Weekly. Default: Daily
-  "colour": "#8B5CF6",                 // embed accent. Default: #5865F2
-  // "enabled": false,                 // park a feed without deleting it
-  "source": {
-    "type": "rss",
-    "urls": [ "https://example.test/indies.rss" ]
-  }
+  "cadence": "Daily",
+  "colour": "#8B5CF6",
+  "source": { "type": "rss", "urls": [ "https://example.test/indies.rss" ] }
 }
 ```
 
-The key (`indie-picks`) is what the ledger stores, so renaming one orphans the channels already
-using it. Sources come in two kinds:
+| Key           | Required | Value                | Default  | Meaning                                    |
+| ------------- | -------- | -------------------- | -------- | ------------------------------------------ |
+| `label`       | yes      | string, ≤ 100        | —        | Shown in the menu and on every embed.      |
+| `description` | yes      | string, ≤ 400        | —        | One line, in the menu and `/merchant help`. |
+| `source`      | yes      | object               | —        | Where the items come from — see below.     |
+| `channel`     | no       | string               | the key  | Suggested channel name.                    |
+| `cadence`     | no       | `Live`/`Daily`/`Weekly` | `Daily` | How often the channel hears from it.      |
+| `colour`      | no       | `"#RRGGBB"`          | `#5865F2` | Embed accent.                             |
+| `enabled`     | no       | `true`/`false`       | `true`   | `false` parks a feed without deleting it.  |
 
-| `type`       | Options                                        | Notes                                                |
-| ------------ | ---------------------------------------------- | ---------------------------------------------------- |
-| `rss`        | `urls` — one or more, merged                    | RSS 1.0, RSS 2.0 and Atom, no format flag needed. A URL may contain `{region}` or `{currency}`, filled in per server from `/merchant region`. |
-| `cheapshark` | `upperPrice`, `minMetacritic`, `sortBy`         | Structured prices, so the embeds can strike through a list price. Always quoted in USD. |
+The feed's key — `indie-picks` above — is what the ledger stores, so renaming one orphans the
+channels already subscribed to it.
 
-Run `merchant --check` after an edit: it validates the file and fetches everything. A feed with a
-mistake in it is dropped with an explanation naming the feed, and the others keep running — one typo
-should not take a server's channels offline.
+### Sources
 
-A genuinely new *kind* of upstream — something that is neither a syndication feed nor CheapShark —
-is the one thing that still needs code: an `ISourceFactory` in `src/Merchant/Feeds/Factories` and a
-line in `Program.cs`. Every feed built on a kind that already exists is config alone.
+`"source": { "type": "rss", … }` — one or more syndication feeds, merged.
+
+| Key    | Required | Value                                     |
+| ------ | -------- | ----------------------------------------- |
+| `urls` | yes      | Array of one or more full http(s) addresses. RSS 1.0, RSS 2.0 and Atom all work without being told which. A URL may contain `{region}` or `{currency}`, filled in per server from `/merchant region`. |
+
+`"source": { "type": "cheapshark", … }` — a slice of CheapShark's deals API. Structured prices, so
+these embeds can strike through a list price. Always quoted in USD, whatever the region is set to.
+
+| Key             | Required | Value                | Default       |
+| --------------- | -------- | -------------------- | ------------- |
+| `upperPrice`    | no       | number above 0       | no ceiling    |
+| `minMetacritic` | no       | number, 0–100        | no floor      |
+| `sortBy`        | no       | `Deal Rating`, `Title`, `Savings`, `Price`, `Metacritic`, `Reviews`, `Release`, `Store` or `Recent` | `Deal Rating` |
+
+### After an edit
+
+```bash
+merchant --check        # validates the file, then fetches every feed
+```
+
+A feed with a mistake in it is dropped at startup with a line naming it and what was expected, and
+every other feed keeps running — one typo should not take a server's channels offline. A file with
+no usable feeds at all stops merchant rather than leaving it idling.
+
+A genuinely new *kind* of upstream — neither a syndication feed nor CheapShark — is the one thing
+that still needs code: an `ISourceFactory` in `src/Merchant/Feeds/Factories` and a line in
+`Program.cs`. Every feed built on a kind that already exists is config alone.
 
 ## Licence
 

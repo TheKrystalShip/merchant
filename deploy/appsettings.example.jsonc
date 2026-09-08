@@ -1,54 +1,56 @@
 // merchant's settings. This file is the whole catalog: every feed merchant can post is described
-// here, and adding, changing or removing one is an edit and a restart. There is nothing to rebuild.
+// here, and adding, changing or removing one is an edit and a restart. Nothing is rebuilt.
 //
-// It lives at ~/.config/merchant/appsettings.json (or wherever MERCHANT_CONFIG points, which is
-// /data/appsettings.json in the container). Delete it and merchant writes this example back.
+// It lives at ~/.config/merchant/appsettings.json, or wherever MERCHANT_CONFIG points — the
+// container sets that to /data/appsettings.json. Delete it and merchant writes this example back.
 //
-// Comments and trailing commas are fine — the JSON reader allows both.
+// Comments and trailing commas are allowed. Check an edit with:  merchant --check
+//
+// ── Schema ──────────────────────────────────────────────────────────────────────────────────
+//
+// "bot"                        every setting optional
+//   "databasePath"   string           where the ledger lives              default: merchant.db
+//   "sweepMinutes"   number, 5-720    how often every feed is fetched     default: 30
+//   "userAgent"      string           sent on every request               default: merchant/1.0 (…)
+//   "devGuildId"     number           register commands to one server     default: register globally
+//   The bot token is NOT read from this file. It comes from MERCHANT_TOKEN and nowhere else.
+//
+// "feeds"                      one entry per feed, named by its key
+//   The key is lower-case words joined by hyphens, up to 100 characters: "free-games". It is what
+//   the ledger stores, so renaming one orphans the channels already subscribed to it.
+//
+//   "label"          REQUIRED  string, <= 100   shown in the menu and on every embed
+//   "description"    REQUIRED  string, <= 400   one line, shown in the menu and /merchant help
+//   "source"         REQUIRED  object           where the items come from, see below
+//   "channel"        optional  string           suggested channel name       default: the key
+//   "cadence"        optional  Live|Daily|Weekly  how often it posts         default: Daily
+//   "colour"         optional  "#RRGGBB"        embed accent                 default: #5865F2
+//   "enabled"        optional  true|false       false parks it, keeping it   default: true
+//
+//   "source": { "type": "rss", … }
+//     "urls"         REQUIRED  array of one or more full http(s) addresses, merged into one feed.
+//                              RSS 1.0, RSS 2.0 and Atom all work without being told which.
+//                              A URL may contain {region} or {currency}; both are filled in per
+//                              server from whatever /merchant region is set to.
+//
+//   "source": { "type": "cheapshark", … }       always priced in USD, whatever the region is
+//     "upperPrice"   optional  number above 0   sale-price ceiling           default: no ceiling
+//     "minMetacritic" optional number, 0-100    review-score floor           default: no floor
+//     "sortBy"       optional  one of: Deal Rating, Title, Savings, Price, Metacritic, Reviews,
+//                              Release, Store, Recent                        default: Deal Rating
+//
+// A feed with a mistake in it is dropped at startup with a line naming it and what was expected;
+// every other feed keeps running. A file with no usable feeds at all stops merchant.
+//
+// ────────────────────────────────────────────────────────────────────────────────────────────
 {
   "bot": {
-    // Where the ledger of what has already been posted is kept.
     "databasePath": "merchant.db",
-
-    // How often every subscribed feed is fetched, 5 to 720. This is not how often a channel hears
-    // from merchant: that is each subscription's own cadence, chosen when it is set up.
     "sweepMinutes": 30,
-
-    // Sent on every request. CheapShark refuses a request without a descriptive user agent, and
-    // Reddit throttles a generic one harder, so leave the shape of this alone.
     "userAgent": "merchant/1.0 (Discord game-deal announcer; +https://github.com/TheKrystalShip/merchant)"
-
-    // Register commands into one server instead of globally. Guild commands appear instantly where
-    // global ones take up to an hour, so set this while developing and remove it afterwards.
     // "devGuildId": 123456789012345678
-
-    // The bot token is NOT read from this file, ever. It comes from MERCHANT_TOKEN, so this file
-    // can be copied, pasted into a chat window or committed without leaking anything.
   },
 
-  // Each feed is named by its key — lower case, hyphenated. The key is what the ledger stores and
-  // what the /merchant add menu sends back, so renaming one orphans the channels already using it.
-  //
-  //   label         what the menu and the embeds show. Up to 100 characters.
-  //   description   one line explaining what lands in the channel.
-  //   channel       suggested channel name, offered to somebody who has not made one yet.
-  //   cadence       Live, Daily or Weekly — the default this feed is offered with. Default: Daily.
-  //   colour        embed accent, so channels read apart at a glance. Default: #5865F2.
-  //   enabled       set false to park a feed without deleting it. Default: true.
-  //   source        where the items come from. See the two kinds below.
-  //
-  // Sources come in two kinds:
-  //
-  //   { "type": "rss", "urls": [ … ] }
-  //       One or more feeds, merged. RSS 1.0, RSS 2.0 and Atom all work without being told which.
-  //       A URL may contain {region} or {currency}, filled in per server from /merchant region.
-  //
-  //   { "type": "cheapshark", "upperPrice": 10, "minMetacritic": 75, "sortBy": "Savings" }
-  //       A slice of CheapShark's deals API. All three are optional. sortBy is one of Deal Rating,
-  //       Title, Savings, Price, Metacritic, Reviews, Release, Store or Recent. Prices are always
-  //       quoted in US dollars — CheapShark has no regional pricing.
-  //
-  // A feed with a mistake in it is dropped with an explanation on startup; the others still run.
   "feeds": {
 
     "top-week": {

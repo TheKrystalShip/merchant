@@ -125,7 +125,7 @@ hitting it has no access to the logs.
 
 ```bash
 dotnet build
-dotnet test                                    # 113 tests, no network
+dotnet test                                    # 114 tests, no network
 dotnet run --project src/Merchant -- --check      # validate the settings file, fetch every feed
 dotnet run --project src/Merchant -- --check ES   # …for another region
 ```
@@ -155,9 +155,12 @@ the entire interface for somebody with a text editor and no access to this repos
 
 ## Adding a feed
 
-Edit `appsettings.json` and restart. No code, no rebuild, no command re-registration. `deploy/appsettings.example.jsonc`
-documents every field inline and is the file a fresh install is seeded with, so a new field belongs
-in its comments too.
+Edit `appsettings.json` and restart. No code, no rebuild, no command re-registration.
+
+The schema is written down twice on purpose: in the comment header of `deploy/appsettings.example.jsonc`,
+which is the file a fresh install is seeded with and the one somebody has open while editing, and in
+the README's *Editing the feeds* section. A new field, or a new value for an existing one, belongs in
+both — and in `FeedCatalog.Load`, which is the only place that decides what a field means.
 
 Adding a new *kind* of source is a class in `Feeds/Factories` implementing `ISourceFactory` and a
 `AddSingleton<ISourceFactory, …>()` in `Program.cs`. It returns an `ISourceBlueprint`, which is a
