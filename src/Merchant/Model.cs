@@ -19,9 +19,9 @@ public enum Cadence
 /// </summary>
 /// <param name="Id">Stable across sweeps: the ledger's identity for "already posted".</param>
 /// <param name="Title">What the embed leads with.</param>
-/// <param name="Url">Where the reader goes.</param>
+/// <param name="Url">Where the reader goes. An absolute http(s) address: Discord takes nothing else.</param>
 /// <param name="Summary">A sentence at most; trimmed hard before it reaches Discord.</param>
-/// <param name="ImageUrl">Thumbnail, when the source gives one.</param>
+/// <param name="ImageUrl">Thumbnail, when the source gives a usable one. Absolute http(s) too.</param>
 /// <param name="Published">When the source says it appeared. Used only for ordering.</param>
 /// <param name="Price">Rendered sale price including its currency symbol, e.g. <c>$4.99</c>.</param>
 /// <param name="WasPrice">Rendered list price, for the struck-through comparison.</param>

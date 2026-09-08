@@ -100,7 +100,7 @@ public sealed class CheapSharkSource : ISource
             Title: title,
             Url: $"https://www.cheapshark.com/redirect?dealID={Uri.EscapeDataString(dealId)}",
             Summary: SteamVerdict(deal),
-            ImageUrl: Text(deal, "thumb"),
+            ImageUrl: Links.Http(Text(deal, "thumb")),
             Published: Released(deal),
             Price: sale is { } p ? $"${p:0.00}" : null,
             WasPrice: normal is { } w ? $"${w:0.00}" : null,

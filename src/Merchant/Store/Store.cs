@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 
@@ -11,10 +12,18 @@ namespace Merchant.Store;
 /// payload and <c>posted = 0</c>; a live subscription flushes those rows on the next sweep and a
 /// weekly one leaves them sitting for seven days. That is what lets merchant do digests at all —
 /// an ordinary RSS bot posts on discovery and so can only ever be "live".
+///
+/// One connection, serialised. Two callers reach this object without taking turns — the sweep on
+/// its background loop, and every slash command on the gateway's threads — and SQLite scopes a
+/// transaction to the connection, not to the caller. An unsynchronised write from a command lands
+/// inside whatever transaction the sweep has open and is rolled back with it, which is a
+/// subscription that reports itself created and then does not exist. Every entry point below takes
+/// the same gate; the operations are single-digit milliseconds, so the contention costs nothing.
 /// </summary>
 public sealed class Store : IDisposable
 {
     private readonly SqliteConnection _db;
+    private readonly Lock _gate = new();
 
     /// <summary>Opens (creating if needed) the database at this path and brings the schema up.</summary>
     public Store(string path)
@@ -73,23 +82,32 @@ public sealed class Store : IDisposable
     /// <summary>This server's preferences, falling back to the defaults when it has set none.</summary>
     public GuildSettings Settings(ulong guildId)
     {
-        using SqliteCommand cmd = Command(
-            "SELECT region, currency FROM guilds WHERE guild_id = $g",
-            ("$g", (long)guildId));
+        lock (_gate)
+        {
+            using SqliteCommand cmd = Command(
+                "SELECT region, currency FROM guilds WHERE guild_id = $g",
+                ("$g", (long)guildId));
 
-        using SqliteDataReader reader = cmd.ExecuteReader();
-        return reader.Read()
-            ? new GuildSettings(guildId, reader.GetString(0), reader.GetString(1))
-            : GuildSettings.Default(guildId);
+            using SqliteDataReader reader = cmd.ExecuteReader();
+            return reader.Read()
+                ? new GuildSettings(guildId, reader.GetString(0), reader.GetString(1))
+                : GuildSettings.Default(guildId);
+        }
     }
 
     /// <summary>Stores this server's preferences, replacing whatever was there.</summary>
-    public void SaveSettings(GuildSettings settings) => Execute(
-        """
-        INSERT INTO guilds (guild_id, region, currency) VALUES ($g, $r, $c)
-        ON CONFLICT (guild_id) DO UPDATE SET region = $r, currency = $c
-        """,
-        ("$g", (long)settings.GuildId), ("$r", settings.Region), ("$c", settings.Currency));
+    public void SaveSettings(GuildSettings settings)
+    {
+        lock (_gate)
+        {
+            Execute(
+                """
+                INSERT INTO guilds (guild_id, region, currency) VALUES ($g, $r, $c)
+                ON CONFLICT (guild_id) DO UPDATE SET region = $r, currency = $c
+                """,
+                ("$g", (long)settings.GuildId), ("$r", settings.Region), ("$c", settings.Currency));
+        }
+    }
 
     // ---- subscriptions --------------------------------------------------------------------
 
@@ -101,43 +119,62 @@ public sealed class Store : IDisposable
     public (long Id, bool Created) Subscribe(
         ulong guildId, ulong channelId, string category, Cadence cadence, ulong? mentionRoleId)
     {
-        long? existing = ScalarLong(
-            "SELECT id FROM subscriptions WHERE channel_id = $c AND category = $k",
-            ("$c", (long)channelId), ("$k", category));
-
-        if (existing is { } id)
+        lock (_gate)
         {
+            long? existing = ScalarLong(
+                "SELECT id FROM subscriptions WHERE channel_id = $c AND category = $k",
+                ("$c", (long)channelId), ("$k", category));
+
+            if (existing is { } id)
+            {
+                Execute(
+                    "UPDATE subscriptions SET cadence = $d, mention_role_id = $m WHERE id = $i",
+                    ("$d", (int)cadence), ("$m", NullableId(mentionRoleId)), ("$i", id));
+                return (id, false);
+            }
+
             Execute(
-                "UPDATE subscriptions SET cadence = $d, mention_role_id = $m WHERE id = $i",
-                ("$d", (int)cadence), ("$m", NullableId(mentionRoleId)), ("$i", id));
-            return (id, false);
+                """
+                INSERT INTO subscriptions
+                    (guild_id, channel_id, category, cadence, mention_role_id, created_at)
+                VALUES ($g, $c, $k, $d, $m, $t)
+                """,
+                ("$g", (long)guildId), ("$c", (long)channelId), ("$k", category),
+                ("$d", (int)cadence), ("$m", NullableId(mentionRoleId)),
+                ("$t", Iso(DateTimeOffset.UtcNow)));
+
+            return (ScalarLong("SELECT last_insert_rowid()") ?? 0, true);
         }
-
-        Execute(
-            """
-            INSERT INTO subscriptions
-                (guild_id, channel_id, category, cadence, mention_role_id, created_at)
-            VALUES ($g, $c, $k, $d, $m, $t)
-            """,
-            ("$g", (long)guildId), ("$c", (long)channelId), ("$k", category),
-            ("$d", (int)cadence), ("$m", NullableId(mentionRoleId)),
-            ("$t", Iso(DateTimeOffset.UtcNow)));
-
-        return (ScalarLong("SELECT last_insert_rowid()") ?? 0, true);
     }
 
     /// <summary>Drops a subscription and everything merchant remembered for it.</summary>
     /// <returns>True when a row in this guild matched; false when the id is wrong or not theirs.</returns>
-    public bool Unsubscribe(ulong guildId, long id) =>
-        Execute("DELETE FROM subscriptions WHERE id = $i AND guild_id = $g",
-            ("$i", id), ("$g", (long)guildId)) > 0;
+    public bool Unsubscribe(ulong guildId, long id)
+    {
+        lock (_gate)
+        {
+            return Execute("DELETE FROM subscriptions WHERE id = $i AND guild_id = $g",
+                ("$i", id), ("$g", (long)guildId)) > 0;
+        }
+    }
 
     /// <summary>Every subscription in one server, oldest first.</summary>
-    public IReadOnlyList<Subscription> ForGuild(ulong guildId) =>
-        ReadSubscriptions("WHERE guild_id = $g ORDER BY id", ("$g", (long)guildId));
+    public IReadOnlyList<Subscription> ForGuild(ulong guildId)
+    {
+        lock (_gate)
+        {
+            return ReadSubscriptions("WHERE guild_id = $g ORDER BY id", ("$g", (long)guildId));
+        }
+    }
 
     /// <summary>Every subscription merchant holds, across all servers. The sweep's work list.</summary>
-    public IReadOnlyList<Subscription> All() => ReadSubscriptions("ORDER BY id");
+    public IReadOnlyList<Subscription> All()
+    {
+        lock (_gate)
+        {
+            return ReadSubscriptions("ORDER BY id");
+        }
+    }
 
     private IReadOnlyList<Subscription> ReadSubscriptions(
         string tail, params (string Name, object? Value)[] parameters)
@@ -161,7 +198,10 @@ public sealed class Store : IDisposable
                 CategoryKey: reader.GetString(3),
                 Cadence: (Cadence)reader.GetInt32(4),
                 MentionRoleId: reader.IsDBNull(5) ? null : (ulong)reader.GetInt64(5),
-                LastPostedAt: reader.IsDBNull(6) ? null : DateTimeOffset.Parse(reader.GetString(6))));
+                LastPostedAt: reader.IsDBNull(6)
+                    ? null
+                    : DateTimeOffset.Parse(
+                        reader.GetString(6), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)));
         }
 
         return rows;
@@ -180,65 +220,83 @@ public sealed class Store : IDisposable
     /// <returns>How many of these items merchant had not seen before.</returns>
     public int Record(long subscriptionId, IEnumerable<FeedItem> items, bool alreadyPosted)
     {
-        using SqliteTransaction tx = _db.BeginTransaction();
-        int added = 0;
-
-        foreach (FeedItem item in items)
+        lock (_gate)
         {
-            using SqliteCommand cmd = Command(
-                """
-                INSERT INTO seen (subscription_id, item_id, first_seen, posted, payload)
-                VALUES ($s, $i, $t, $p, $j)
-                ON CONFLICT (subscription_id, item_id) DO NOTHING
-                """,
-                ("$s", subscriptionId), ("$i", item.Id), ("$t", Iso(DateTimeOffset.UtcNow)),
-                ("$p", alreadyPosted ? 1 : 0), ("$j", JsonSerializer.Serialize(item)));
+            using SqliteTransaction tx = _db.BeginTransaction();
+            int added = 0;
 
-            cmd.Transaction = tx;
-            added += cmd.ExecuteNonQuery();
+            foreach (FeedItem item in items)
+            {
+                using SqliteCommand cmd = Command(
+                    """
+                    INSERT INTO seen (subscription_id, item_id, first_seen, posted, payload)
+                    VALUES ($s, $i, $t, $p, $j)
+                    ON CONFLICT (subscription_id, item_id) DO NOTHING
+                    """,
+                    ("$s", subscriptionId), ("$i", item.Id), ("$t", Iso(DateTimeOffset.UtcNow)),
+                    ("$p", alreadyPosted ? 1 : 0), ("$j", JsonSerializer.Serialize(item)));
+
+                cmd.Transaction = tx;
+                added += cmd.ExecuteNonQuery();
+            }
+
+            tx.Commit();
+            return added;
         }
-
-        tx.Commit();
-        return added;
     }
 
     /// <summary>True when merchant has never swept this subscription.</summary>
-    public bool IsUnswept(long subscriptionId) =>
-        ScalarLong("SELECT COUNT(*) FROM seen WHERE subscription_id = $s", ("$s", subscriptionId)) == 0;
+    public bool IsUnswept(long subscriptionId)
+    {
+        lock (_gate)
+        {
+            return ScalarLong(
+                "SELECT COUNT(*) FROM seen WHERE subscription_id = $s", ("$s", subscriptionId)) == 0;
+        }
+    }
 
     /// <summary>
     /// What is waiting to go out for this subscription, newest first, capped.
     /// </summary>
     public IReadOnlyList<FeedItem> Pending(long subscriptionId, int limit)
     {
-        using SqliteCommand cmd = Command(
-            """
-            SELECT payload FROM seen
-            WHERE subscription_id = $s AND posted = 0
-            ORDER BY first_seen DESC, rowid DESC
-            LIMIT $n
-            """,
-            ("$s", subscriptionId), ("$n", limit));
-
-        using SqliteDataReader reader = cmd.ExecuteReader();
-        List<FeedItem> items = [];
-
-        while (reader.Read())
+        lock (_gate)
         {
-            FeedItem? item = JsonSerializer.Deserialize<FeedItem>(reader.GetString(0));
-            if (item is not null)
-            {
-                items.Add(item);
-            }
-        }
+            using SqliteCommand cmd = Command(
+                """
+                SELECT payload FROM seen
+                WHERE subscription_id = $s AND posted = 0
+                ORDER BY first_seen DESC, rowid DESC
+                LIMIT $n
+                """,
+                ("$s", subscriptionId), ("$n", limit));
 
-        return items;
+            using SqliteDataReader reader = cmd.ExecuteReader();
+            List<FeedItem> items = [];
+
+            while (reader.Read())
+            {
+                FeedItem? item = JsonSerializer.Deserialize<FeedItem>(reader.GetString(0));
+                if (item is not null)
+                {
+                    items.Add(item);
+                }
+            }
+
+            return items;
+        }
     }
 
     /// <summary>How many items are waiting for this subscription.</summary>
-    public int PendingCount(long subscriptionId) => (int)(ScalarLong(
-        "SELECT COUNT(*) FROM seen WHERE subscription_id = $s AND posted = 0",
-        ("$s", subscriptionId)) ?? 0);
+    public int PendingCount(long subscriptionId)
+    {
+        lock (_gate)
+        {
+            return (int)(ScalarLong(
+                "SELECT COUNT(*) FROM seen WHERE subscription_id = $s AND posted = 0",
+                ("$s", subscriptionId)) ?? 0);
+        }
+    }
 
     /// <summary>
     /// Marks exactly the items that went out as sent, and stamps the last-posted time.
@@ -249,27 +307,30 @@ public sealed class Store : IDisposable
     /// </summary>
     public void MarkFlushed(long subscriptionId, IEnumerable<string> itemIds, DateTimeOffset when)
     {
-        using SqliteTransaction tx = _db.BeginTransaction();
-
-        foreach (string itemId in itemIds)
+        lock (_gate)
         {
-            using SqliteCommand cmd = Command(
-                "UPDATE seen SET posted = 1 WHERE subscription_id = $s AND item_id = $i",
-                ("$s", subscriptionId), ("$i", itemId));
+            using SqliteTransaction tx = _db.BeginTransaction();
 
-            cmd.Transaction = tx;
-            cmd.ExecuteNonQuery();
+            foreach (string itemId in itemIds)
+            {
+                using SqliteCommand cmd = Command(
+                    "UPDATE seen SET posted = 1 WHERE subscription_id = $s AND item_id = $i",
+                    ("$s", subscriptionId), ("$i", itemId));
+
+                cmd.Transaction = tx;
+                cmd.ExecuteNonQuery();
+            }
+
+            using (SqliteCommand stamp = Command(
+                       "UPDATE subscriptions SET last_posted_at = $t WHERE id = $i",
+                       ("$t", Iso(when)), ("$i", subscriptionId)))
+            {
+                stamp.Transaction = tx;
+                stamp.ExecuteNonQuery();
+            }
+
+            tx.Commit();
         }
-
-        using (SqliteCommand stamp = Command(
-                   "UPDATE subscriptions SET last_posted_at = $t WHERE id = $i",
-                   ("$t", Iso(when)), ("$i", subscriptionId)))
-        {
-            stamp.Transaction = tx;
-            stamp.ExecuteNonQuery();
-        }
-
-        tx.Commit();
     }
 
     /// <summary>
@@ -277,16 +338,28 @@ public sealed class Store : IDisposable
     /// Without this the ledger grows forever on a live feed.
     /// </summary>
     /// <returns>How many rows were dropped.</returns>
-    public int Prune(TimeSpan retention) => Execute(
-        "DELETE FROM seen WHERE posted = 1 AND first_seen < $t",
-        ("$t", Iso(DateTimeOffset.UtcNow - retention)));
+    public int Prune(TimeSpan retention)
+    {
+        lock (_gate)
+        {
+            return Execute(
+                "DELETE FROM seen WHERE posted = 1 AND first_seen < $t",
+                ("$t", Iso(DateTimeOffset.UtcNow - retention)));
+        }
+    }
 
     // ---- plumbing -------------------------------------------------------------------------
 
     /// <summary>A snowflake boxed for SQLite, where "no role" has to travel as a null.</summary>
     private static object? NullableId(ulong? id) => id is { } value ? (long)value : null;
 
-    private static string Iso(DateTimeOffset when) => when.ToUniversalTime().ToString("O");
+    /// <summary>
+    /// How a time is written and read back. Both ends name the invariant culture: merchant runs
+    /// with globalization on, and a host culture whose default calendar is not Gregorian reads its
+    /// own dates back as different ones.
+    /// </summary>
+    private static string Iso(DateTimeOffset when) =>
+        when.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
 
     private SqliteCommand Command(string sql, params (string Name, object? Value)[] parameters)
     {
@@ -315,5 +388,11 @@ public sealed class Store : IDisposable
     }
 
     /// <inheritdoc />
-    public void Dispose() => _db.Dispose();
+    public void Dispose()
+    {
+        lock (_gate)
+        {
+            _db.Dispose();
+        }
+    }
 }

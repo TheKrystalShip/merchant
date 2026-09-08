@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
@@ -99,7 +100,8 @@ public sealed partial class RssSource : ISource
 
     /// <summary>
     /// The entry's destination. Atom puts it in an <c>href</c> attribute and may carry several
-    /// links, only one of which is the article; RSS puts it in the element's text.
+    /// links, only one of which is the article; RSS puts it in the element's text. Anything that is
+    /// not an absolute http(s) address costs the entry — see <see cref="Links"/>.
     /// </summary>
     private static string? ReadLink(XElement entry)
     {
@@ -111,15 +113,15 @@ public sealed partial class RssSource : ISource
                 string? rel = link.Attribute("rel")?.Value;
                 if (rel is null or "alternate")
                 {
-                    return href;
+                    return Links.Http(href);
                 }
 
                 continue;
             }
 
-            if (!string.IsNullOrWhiteSpace(link.Value))
+            if (Links.Http(link.Value) is { } text)
             {
-                return link.Value.Trim();
+                return text;
             }
         }
 
@@ -133,13 +135,22 @@ public sealed partial class RssSource : ISource
         return string.IsNullOrWhiteSpace(found?.Value) ? null : found.Value;
     }
 
-    /// <summary>The entry's timestamp, across the several element names the formats use for it.</summary>
+    /// <summary>
+    /// The entry's timestamp, across the several element names the formats use for it.
+    ///
+    /// Read against the invariant culture, never the host's. A feed writes English month and day
+    /// names on a Gregorian calendar whatever locale the machine reading it happens to have, and
+    /// merchant runs with globalization on: under a culture whose default calendar is not Gregorian
+    /// — fa-IR, th-TH — the same string is refused or lands six centuries out, which silently
+    /// reorders every digest it appears in.
+    /// </summary>
     private static DateTimeOffset? ReadDate(XElement entry)
     {
         foreach (string name in (string[])["pubDate", "published", "date", "updated"])
         {
             string? raw = Child(entry, name);
-            if (raw is not null && DateTimeOffset.TryParse(raw.Trim(), out DateTimeOffset when))
+            if (raw is not null && DateTimeOffset.TryParse(
+                    raw.Trim(), CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTimeOffset when))
             {
                 return when;
             }
@@ -180,7 +191,7 @@ public sealed partial class RssSource : ISource
         }
 
         Match match = ImagePattern().Match(html);
-        return match.Success ? WebUtility.HtmlDecode(match.Groups[1].Value) : null;
+        return match.Success ? Links.Http(WebUtility.HtmlDecode(match.Groups[1].Value)) : null;
     }
 
     /// <summary>Decodes entities and trims. Feeds double-encode often enough to be worth two passes.</summary>

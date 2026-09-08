@@ -27,6 +27,44 @@ public class GlobalizationTests
         Assert.Equal(locale, culture.Name);
     }
 
+    [Theory]
+    [InlineData("fa-IR")]   // Persian calendar by default
+    [InlineData("th-TH")]   // Buddhist calendar by default
+    [InlineData("ar-SA")]   // Umm al-Qura calendar by default
+    [InlineData("en-US")]
+    public void A_feed_date_reads_the_same_whatever_the_host_locale_is(string locale)
+    {
+        // The other half of keeping globalization on: the process picks up whatever culture the
+        // host has, and a feed's dates are English and Gregorian regardless. Read against the
+        // current culture, "Tue, 08 Sep 2026" is refused under fa-IR and th-TH and parsed as a
+        // Persian date under some others — either way the item loses its place in the ordering.
+        CultureInfo original = CultureInfo.CurrentCulture;
+
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo(locale);
+
+            IReadOnlyList<FeedItem> items = Merchant.Sources.RssSource.Parse("""
+                <rss version="2.0"><channel>
+                  <item>
+                    <title>A Game</title>
+                    <link>https://example.test/a</link>
+                    <pubDate>Tue, 08 Sep 2026 10:00:00 GMT</pubDate>
+                  </item>
+                </channel></rss>
+                """);
+
+            FeedItem item = Assert.Single(items);
+            Assert.Equal(
+                new DateTimeOffset(2026, 9, 8, 10, 0, 0, TimeSpan.Zero),
+                item.Published!.Value.ToUniversalTime());
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
+        }
+    }
+
     [Fact]
     public void The_runtime_is_not_in_invariant_mode()
     {

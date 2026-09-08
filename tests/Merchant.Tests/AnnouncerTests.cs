@@ -1,5 +1,6 @@
 using Merchant.Discord;
 using Merchant.Feeds;
+using Merchant.Sources;
 using Discord;
 using Xunit;
 
@@ -17,6 +18,56 @@ public class AnnouncerTests
         Summary: "Very Positive — 97% of 200,000 reviews",
         ImageUrl: "https://example.test/art.jpg",
         Price: "$4.99", WasPrice: "$14.99", DiscountPercent: 67, Store: "Steam", Score: 90);
+
+    [Theory]
+    [InlineData(3)]
+    [InlineData(13)]
+    [InlineData(40)]
+    public void The_catalog_embed_holds_whatever_the_settings_file_asks_for(int feeds)
+    {
+        // How many feeds exist is decided in a file merchant does not own. Thirteen at full length
+        // is already past what Discord carries, and it refuses the embed while it is being built —
+        // so without a budget /merchant help does not shorten, it stops answering.
+        Category Fat(int n) => new(
+            $"feed-{n}", new string('L', Schema.Limits.MenuText),
+            new string('d', Schema.Limits.DescriptionText),
+            $"channel-{n}", Cadence.Daily, 0x2A7150);
+
+        EmbedBuilder shell = new EmbedBuilder()
+            .WithTitle("What're ya buyin'?")
+            .WithDescription("Pick a feed, pick a channel, done.")
+            .WithFooter("/merchant add · /merchant list");
+
+        Embed embed = Announcer.Catalog(shell, [.. Enumerable.Range(0, feeds).Select(Fat)]);
+
+        Assert.True(embed.Length <= EmbedBuilder.MaxEmbedLength);
+        Assert.True(embed.Fields.Length <= EmbedBuilder.MaxFieldCount);
+        Assert.InRange(embed.Fields.Length, 1, feeds);
+
+        // A catalog that fits is shown whole; only an oversized one is cut.
+        Assert.Equal(feeds <= 3, embed.Fields.Length == feeds);
+
+        // Nothing is quietly dropped: a shortened list says so.
+        if (embed.Fields.Length < feeds)
+        {
+            Assert.Contains($"{feeds - embed.Fields.Length} more", embed.Footer!.Value.Text);
+        }
+    }
+
+    [Theory]
+    [InlineData(Fixtures.SteamWeekly)]
+    [InlineData(Fixtures.ItadGiveaways)]
+    [InlineData(Fixtures.RedditGameDeals)]
+    public void Every_item_a_real_feed_produces_can_be_announced(string document)
+    {
+        // Discord validates an embed as it is built, so anything it refuses throws inside the sweep
+        // — where the item is left unposted and retried forever. The end of the contract the
+        // sources hold up: whatever comes out of a real document is postable.
+        foreach (FeedItem item in RssSource.Parse(Fixtures.Read(document)))
+        {
+            Announcer.Item(Deals, item);
+        }
+    }
 
     [Fact]
     public void An_item_embed_carries_the_price_the_store_and_the_score()

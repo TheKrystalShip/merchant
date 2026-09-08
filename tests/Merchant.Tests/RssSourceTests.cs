@@ -25,6 +25,47 @@ public class RssSourceTests
         });
     }
 
+    [Theory]
+    [InlineData("/deals/relative-path")]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("mailto:someone@example.test")]
+    [InlineData("example.test/no-scheme")]
+    public void An_entry_whose_link_discord_would_refuse_is_dropped(string link)
+    {
+        // Discord validates a URL while the embed is being built, so a bad one throws inside the
+        // sweep. The item is then never marked sent and the next sweep picks it up again: one junk
+        // link would jam that channel for good. It costs its own entry here instead.
+        IReadOnlyList<FeedItem> items = RssSource.Parse($"""
+            <rss version="2.0"><channel>
+              <item><title>Junk</title><link>{link}</link></item>
+              <item><title>Good</title><link>https://example.test/good</link></item>
+            </channel></rss>
+            """);
+
+        FeedItem item = Assert.Single(items);
+        Assert.Equal("https://example.test/good", item.Url);
+    }
+
+    [Fact]
+    public void Art_that_discord_would_refuse_costs_the_art_and_not_the_item()
+    {
+        // A truncated or relative src is common in a feed body, and unlike the link it is not the
+        // point of the post — so the entry stays and goes out without a thumbnail.
+        IReadOnlyList<FeedItem> items = RssSource.Parse("""
+            <rss version="2.0"><channel>
+              <item>
+                <title>Game</title>
+                <link>https://example.test/game</link>
+                <description>&lt;img src="/img/capsule.jpg"&gt; On sale now.</description>
+              </item>
+            </channel></rss>
+            """);
+
+        FeedItem item = Assert.Single(items);
+        Assert.Null(item.ImageUrl);
+        Assert.Equal("https://example.test/game", item.Url);
+    }
+
     [Fact]
     public void Falls_back_to_the_link_when_an_entry_has_no_guid()
     {

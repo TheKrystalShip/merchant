@@ -84,7 +84,10 @@ builder.Configuration.AddConfiguration(config);
 
 builder.Services.AddSingleton(options);
 builder.Services.AddSingleton(catalog);
-builder.Services.AddSingleton(new Merchant.Store.Store(options.DatabasePath));
+// Built by the container rather than handed to it: a singleton the container did not create is a
+// singleton it will not dispose, and the ledger holds a SQLite connection with a write-ahead log to
+// check back in on the way out.
+builder.Services.AddSingleton(_ => new Merchant.Store.Store(options.DatabasePath));
 
 // A driver is a class and a line here. Nothing else in the codebase names one, which is what keeps
 // the catalog in the settings file rather than spread across a switch and an enum.
@@ -162,6 +165,13 @@ await discord.LoginAsync(TokenType.Bot, token);
 await discord.StartAsync();
 
 await host.RunAsync();
+
+// RunAsync returns on SIGTERM, which is a restart or a deploy nine times out of ten. Closing the
+// session says so: the bot shows offline at once instead of hanging around until the gateway times
+// it out, and the ledger is disposed with the host immediately after.
+await discord.StopAsync();
+await discord.LogoutAsync();
+
 return 0;
 
 // Discord.Net has its own severity ladder; this maps it onto the host's logger so there is one

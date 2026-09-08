@@ -146,7 +146,7 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
 
         await FollowupAsync(embed: new EmbedBuilder()
             .WithTitle("What merchant is announcing")
-            .WithDescription(body.ToString())
+            .WithDescription(Announcer.Truncate(body.ToString(), EmbedBuilder.MaxDescriptionLength))
             .WithColor(new Color(0x453EA0))
             .WithFooter($"Region {settings.Region} · prices in {settings.Currency}")
             .Build(),
@@ -249,17 +249,7 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
             .WithColor(new Color(0xC24A12))
             .WithFooter("/merchant add · /merchant list · /merchant remove · /merchant preview · /merchant region");
 
-        // Discord refuses an embed carrying more fields than this, so a long catalog shows what
-        // fits rather than failing the command outright.
-        foreach (Category category in _catalog.All.Take(EmbedBuilder.MaxFieldCount))
-        {
-            embed.AddField(
-                category.Label,
-                $"{category.Description}\nSuggested channel: `#{category.SuggestedChannelName}` · " +
-                $"posts {category.DefaultCadence.Describe()}");
-        }
-
-        await FollowupAsync(embed: embed.Build(), ephemeral: true);
+        await FollowupAsync(embed: Announcer.Catalog(embed, _catalog.All), ephemeral: true);
     }
 
     /// <summary>
@@ -318,10 +308,13 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
                Right now merchant can post: {string.Join(", ", _catalog.All.Select(c => c.Label))}.
                """);
 
-    /// <summary>A refusal that says what to do about it.</summary>
+    /// <summary>
+    /// A refusal that says what to do about it. Truncated on the way out: some of these name every
+    /// feed in the catalog, and how many that is belongs to whoever edits the settings file.
+    /// </summary>
     private static Embed Problem(string title, string what) => new EmbedBuilder()
-        .WithTitle(title)
-        .WithDescription(what)
+        .WithTitle(Announcer.Truncate(title, EmbedBuilder.MaxTitleLength))
+        .WithDescription(Announcer.Truncate(what, EmbedBuilder.MaxDescriptionLength))
         .WithColor(new Color(0xC24A12))
         .Build();
 }

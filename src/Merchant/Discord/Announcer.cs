@@ -19,6 +19,48 @@ public static class Announcer
     /// <summary>Most single-item posts one sweep will make, so a busy feed cannot flood a channel.</summary>
     public const int LiveBurst = 4;
 
+    /// <summary>
+    /// Lists a catalog into an embed, taking as many feeds as Discord will carry.
+    ///
+    /// The catalog is a file, so its size is somebody else's decision. Discord refuses an embed
+    /// whose parts total more than 6000 characters — around thirteen feeds at the length a feed is
+    /// allowed — and it refuses it at build time, which would take <c>/merchant help</c> down
+    /// altogether rather than shortening it. What fits goes in; the footer says what did not.
+    /// </summary>
+    /// <param name="shell">The embed's own copy: title, description, colour, footer.</param>
+    /// <param name="feeds">The catalog, in menu order.</param>
+    public static Embed Catalog(EmbedBuilder shell, IReadOnlyList<Category> feeds)
+    {
+        int shown = 0;
+
+        foreach (Category feed in feeds)
+        {
+            string name = Truncate(feed.Label, EmbedFieldBuilder.MaxFieldNameLength);
+            string value = Truncate(
+                $"{feed.Description}\nSuggested channel: `#{feed.SuggestedChannelName}` · " +
+                $"posts {feed.DefaultCadence.Describe()}",
+                EmbedFieldBuilder.MaxFieldValueLength);
+
+            // Counted before the field is added: the check has to be able to say no.
+            if (shown == EmbedBuilder.MaxFieldCount
+                || shell.Length + name.Length + value.Length > EmbedBuilder.MaxEmbedLength)
+            {
+                break;
+            }
+
+            shell.AddField(name, value);
+            shown++;
+        }
+
+        if (shown < feeds.Count)
+        {
+            shell.WithFooter($"{shell.Footer?.Text} · and {feeds.Count - shown} more not shown here"
+                .TrimStart(' ', '·'));
+        }
+
+        return shell.Build();
+    }
+
     /// <summary>One deal, at full size.</summary>
     public static Embed Item(Category category, FeedItem item)
     {
@@ -134,6 +176,7 @@ public static class Announcer
     private static string Escape(string text) =>
         text.Replace("[", "\\[").Replace("]", "\\]").Replace("*", "\\*").Replace("_", "\\_");
 
-    private static string Truncate(string text, int limit) =>
+    /// <summary>Cuts text down to what Discord accepts in the place it is going.</summary>
+    internal static string Truncate(string text, int limit) =>
         text.Length <= limit ? text : string.Concat(text.AsSpan(0, limit - 1).TrimEnd(), "…");
 }

@@ -115,9 +115,9 @@ It takes comments and trailing commas, and the copy merchant seeds is annotated 
 The **token is never read from this file** — it comes from `MERCHANT_TOKEN` and nowhere else, so the
 settings file can be copied around, pasted into a chat window or committed without leaking anything.
 
-Every setting above can still be overridden by the environment variable that configured it before
-the file existed (`MERCHANT_DB`, `MERCHANT_SWEEP_MINUTES`, `MERCHANT_USER_AGENT`,
-`MERCHANT_DEV_GUILD`), which is how the unit file and the container pass them.
+Every setting above can also come from the environment — `MERCHANT_DB`, `MERCHANT_SWEEP_MINUTES`,
+`MERCHANT_USER_AGENT`, `MERCHANT_DEV_GUILD` — which wins over the file. That is how the unit file
+and the container pass them.
 
 ## Checking the feeds
 
@@ -140,7 +140,7 @@ ok   under-10        20 items    680 ms  Games Under $10
 ## Development
 
 ```bash
-dotnet test        # 123 tests, no network
+dotnet test        # 142 tests, no network
 dotnet run --project src/Merchant -- --check
 ```
 

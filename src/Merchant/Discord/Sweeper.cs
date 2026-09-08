@@ -91,13 +91,18 @@ public sealed class Sweeper : BackgroundService
         _log.LogInformation("Sweeping {Count} subscription(s).", subscriptions.Count);
         HttpClient http = _http.CreateClient(BotOptions.HttpClientName);
 
+        // One fetch per feed per storefront, however many channels are waiting on it. Subscriptions
+        // multiply with servers and channels; upstreams do not care why merchant is asking twice,
+        // and Reddit in particular answers 429 to far less than that.
+        Dictionary<Fetch, IReadOnlyList<FeedItem>> fetched = [];
+
         foreach (Subscription subscription in subscriptions)
         {
             ct.ThrowIfCancellationRequested();
 
             try
             {
-                await SweepOneAsync(subscription, http, ct);
+                await SweepOneAsync(subscription, http, fetched, ct);
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
@@ -106,6 +111,9 @@ public sealed class Sweeper : BackgroundService
             }
         }
 
+        _log.LogDebug("Fetched {Count} feed(s) for {Subscriptions} subscription(s).",
+            fetched.Count, subscriptions.Count);
+
         int pruned = _store.Prune(Retention);
         if (pruned > 0)
         {
@@ -113,7 +121,11 @@ public sealed class Sweeper : BackgroundService
         }
     }
 
-    private async Task SweepOneAsync(Subscription subscription, HttpClient http, CancellationToken ct)
+    private async Task SweepOneAsync(
+        Subscription subscription,
+        HttpClient http,
+        Dictionary<Fetch, IReadOnlyList<FeedItem>> fetched,
+        CancellationToken ct)
     {
         Category? category = _catalog.Find(subscription.CategoryKey);
         if (category is null)
@@ -127,10 +139,16 @@ public sealed class Sweeper : BackgroundService
         }
 
         GuildSettings settings = _store.Settings(subscription.GuildId);
-        ISource source = _catalog.SourceFor(subscription.CategoryKey, http, settings);
+        Fetch slot = new(category.Key, settings.Region, settings.Currency);
 
-        IReadOnlyList<FeedItem> fetched = await source.FetchAsync(ct);
-        if (fetched.Count == 0)
+        if (!fetched.TryGetValue(slot, out IReadOnlyList<FeedItem>? items))
+        {
+            ISource source = _catalog.SourceFor(category.Key, http, settings);
+            items = await source.FetchAsync(ct);
+            fetched[slot] = items;
+        }
+
+        if (items.Count == 0)
         {
             return;
         }
@@ -139,13 +157,13 @@ public sealed class Sweeper : BackgroundService
         {
             // First contact. The backlog is filed silently, but a handful goes out immediately:
             // a channel that stays empty for a day after setup reads as a bot that does not work.
-            IReadOnlyList<FeedItem> opener = [.. fetched.Take(Announcer.LiveBurst)];
+            IReadOnlyList<FeedItem> opener = [.. items.Take(Announcer.LiveBurst)];
             _store.Record(subscription.Id, opener, alreadyPosted: false);
-            _store.Record(subscription.Id, fetched.Skip(opener.Count), alreadyPosted: true);
+            _store.Record(subscription.Id, items.Skip(opener.Count), alreadyPosted: true);
         }
         else
         {
-            int added = _store.Record(subscription.Id, fetched, alreadyPosted: false);
+            int added = _store.Record(subscription.Id, items, alreadyPosted: false);
             if (added > 0)
             {
                 _log.LogDebug("Subscription {Id}: {Count} new item(s).", subscription.Id, added);
@@ -234,4 +252,10 @@ public sealed class Sweeper : BackgroundService
         _log.LogInformation("Posted {Count} item(s) to {Channel} for {Category}.",
             pending.Count, subscription.ChannelId, category.Key);
     }
+
+    /// <summary>
+    /// What makes two subscriptions the same fetch: the feed, and the storefront its URL is built
+    /// for. Two servers on different regions genuinely are two requests; everything else is one.
+    /// </summary>
+    private readonly record struct Fetch(string Feed, string Region, string Currency);
 }

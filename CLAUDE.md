@@ -85,6 +85,37 @@ that ends up *empty* is fatal: that bot is broken either way and should say so.
 keeps the one secret merchant holds out of a DI singleton every command can reach, and out of a file
 that gets copied around. A `bot.token` in the file is reported and ignored, never used.
 
+**The ledger is one connection, and every entry point takes the same gate.** Two callers reach
+`Store` without taking turns: the sweep on its background loop, and every slash command on the
+gateway's threads. SQLite scopes a transaction to the connection rather than to the caller, so an
+ungated write from a command lands inside whatever transaction `Record` has open and is rolled back
+with it — `/merchant add` answers with a subscription number for a row that no longer exists.
+`StoreConcurrencyTests` reproduces exactly that. The operations are single-digit milliseconds; the
+contention costs nothing.
+
+**Dates are read against the invariant culture, never the host's.** This is the other half of
+keeping globalization on. A feed writes English month names on a Gregorian calendar whatever locale
+the machine has; under `fa-IR` or `th-TH` the current culture refuses those strings or reads them
+six centuries out, and the item silently loses its place in every digest. `GlobalizationTests`
+pins it for both, along with the ledger's own timestamps.
+
+**A source hands out absolute http(s) links and nothing else.** Discord validates a URL while the
+embed is being *built*, so a junk link throws inside the sweep: the item is never marked sent, the
+next sweep picks it up again, and that channel is stuck for good. Feeds do produce these — relative
+paths, `javascript:` hrefs, truncated `src` attributes — so `Links.Http` drops them where the cost
+is one item. Anything reaching `Announcer` is postable.
+
+**Embeds are packed to Discord's budget, because the size of the catalog is a stranger's decision.**
+An embed refuses to build past 6000 characters total, which is around thirteen feeds at the length a
+feed is allowed. `Announcer.Catalog` fits what it can and says what it left out, so a long catalog
+shortens `/merchant help` instead of taking it offline; `/merchant list` and every refusal are
+truncated for the same reason.
+
+**One fetch per feed per storefront, per sweep.** Subscriptions multiply with servers and channels;
+upstreams do not care why merchant is asking the same question three times, and Reddit answers 429
+to far less than that. `Sweeper` caches a sweep's fetches by feed and region — two servers on
+different regions genuinely are two requests, everything else is one.
+
 **Sweeping and posting are separate.** Everything is fetched on one interval; each subscription
 posts on its own clock, reading the backlog the sweep filed. This is the only reason a weekly
 channel is possible — an RSS bot that posts on discovery can only ever be live. Do not collapse
@@ -134,7 +165,7 @@ hitting it has no access to the logs.
 
 ```bash
 dotnet build
-dotnet test                                    # 123 tests, no network
+dotnet test                                    # 142 tests, no network
 dotnet run --project src/Merchant -- --check      # validate the settings file, fetch every feed
 dotnet run --project src/Merchant -- --check ES   # …for another region
 ```
