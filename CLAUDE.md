@@ -182,6 +182,24 @@ is null whenever a guild is missing from the cache; `Context.Interaction.GuildId
 present. A permission check that cannot run returns null rather than an empty list, so "could not
 check" is never mistaken for "nothing is missing".
 
+**A refused token stops merchant; every other gateway failure is waited out.** Discord.Net
+reconnects on anything, which is right for a dropped connection, an outage or a DNS hiccup and
+wrong for exactly one case: a 401 means the token is wrong or has been reset, and no amount of
+waiting changes that. Left alone it produces the worst failure this bot has — running, reporting
+itself up, posting nothing, and explaining why only inside a stack trace nobody is reading. So the
+401 is named once at `LogCritical`, the application is stopped, and the exit code is non-zero, which
+is what makes it a failed unit and a restarting container instead of a quiet one.
+`GatewayFailure.IsUnauthorized` looks *through* an exception rather than at it, because the status
+arrives wrapped — the gateway's connect failure carries the REST call's exception underneath it —
+and `GatewayFailureTests` pins both directions, since being trigger-happy here would mean quitting
+over an outage Discord recovers from in a minute.
+
+**Shutdown logs out before the host is disposed.** `RunAsync` disposes the host the moment it
+returns and the host owns the gateway client, so anything said to Discord after it is said to a
+disposed object. `StartAsync` plus `WaitForShutdownAsync` leaves the client alive until the `using`
+at the end of `Program.cs`, which is after the logout — and the logout is what makes the bot show
+offline at once on a restart rather than lingering until the gateway times it out.
+
 **No privileged intents.** `GatewayIntents.Guilds` only. merchant reads no messages and no member
 lists, so the application never needs intent review. Do not add an intent for a convenience.
 

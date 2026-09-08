@@ -135,7 +135,31 @@ DiscordSocketClient discord = host.Services.GetRequiredService<DiscordSocketClie
 InteractionService interactions = host.Services.GetRequiredService<InteractionService>();
 ILogger logger = host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("merchant");
 
-discord.Log += message => Relay(logger, message);
+// A refused token is the one failure that reconnecting cannot mend, and it is also the most likely
+// mistake somebody setting this up will make. Discord.Net treats it like a dropped connection and
+// retries for as long as the process lives, so without this merchant reports itself up, posts
+// nothing, and says why only inside a stack trace. Said once, plainly, and then stop.
+bool unauthorized = false;
+IHostApplicationLifetime lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
+
+discord.Log += message =>
+{
+    if (!unauthorized && GatewayFailure.IsUnauthorized(message.Exception))
+    {
+        unauthorized = true;
+
+        logger.LogCritical(
+            "Discord refused {Variable} (401 Unauthorized). The token is wrong, or it was reset — " +
+            "resetting one at https://discord.com/developers invalidates the old value. merchant is " +
+            "stopping rather than retrying a token that cannot start working.",
+            BotOptions.TokenVariable);
+
+        lifetime.StopApplication();
+    }
+
+    return Relay(logger, message);
+};
+
 interactions.Log += message => Relay(logger, message);
 
 await interactions.AddModuleAsync<MerchantModule>(host.Services);
@@ -186,7 +210,9 @@ await host.WaitForShutdownAsync();
 await discord.StopAsync();
 await discord.LogoutAsync();
 
-return 0;
+// Non-zero, so a refused token reads as a failed unit and a restarting container rather than as a
+// service that decided to stop. Every other shutdown here is somebody asking for one.
+return unauthorized ? 1 : 0;
 
 // Discord.Net has its own severity ladder; this maps it onto the host's logger so there is one
 // log stream to read in journalctl rather than two interleaved formats.

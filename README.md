@@ -186,6 +186,11 @@ every sweep, every fetch and every post, including the ones that decided to do n
 A silent channel with everything else healthy is almost always a permission that was removed after
 `/merchant add` ran. Re-running `add` on the same channel re-checks them and names what is missing.
 
+If merchant is not running at all and the log ends on a `401 Unauthorized`, the token is wrong or
+has been reset — merchant stops rather than retrying one that cannot start working, so this shows
+up as a service that has failed rather than one that is quietly doing nothing. Resetting a bot's
+token at <https://discord.com/developers> invalidates the previous value.
+
 ## The ledger
 
 One SQLite file, and the only state merchant has: which channels want which feeds, and what each has
