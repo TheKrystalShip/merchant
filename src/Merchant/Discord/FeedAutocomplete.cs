@@ -6,13 +6,12 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Merchant.Discord;
 
 /// <summary>
-/// The feed menu, resolved when somebody opens it rather than when the command was registered.
+/// The feed menu, resolved when somebody opens it.
 ///
-/// A fixed dropdown cannot work here: Discord is told a command's choices once, at registration,
-/// so a catalog that lives in a file could only ever be shown by re-registering commands every time
-/// the file changed. Autocomplete is asked on each keystroke instead — including the empty one, so
-/// the full list still appears the moment the field is focused, which is what makes this read like
-/// a menu rather than a text box.
+/// Discord is told a command's fixed choices once, at registration, so a catalog living in a file
+/// could only be shown by re-registering commands on every edit. Autocomplete is asked per
+/// keystroke instead — including the empty one, so the full list appears the moment the field is
+/// focused, which is what makes this read as a menu rather than a text box.
 /// </summary>
 public sealed class FeedAutocomplete : AutocompleteHandler
 {

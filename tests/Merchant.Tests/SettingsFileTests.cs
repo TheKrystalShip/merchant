@@ -117,6 +117,16 @@ public class SettingsFileTests
     }
 
     [Fact]
+    public void A_setting_that_does_not_exist_is_reported_rather_than_ignored()
+    {
+        List<string> problems = [];
+        BotOptions.Load(Settings.Read("""{ "bot": { "sweepMinutes ": 30, "userAgentt": "x" } }"""), problems);
+
+        Assert.Equal(2, problems.Count);
+        Assert.All(problems, p => Assert.Contains("there is no setting", p, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void A_token_in_the_file_is_called_out_rather_than_used()
     {
         // The token is the one secret merchant holds. This file gets copied, pasted and shared;

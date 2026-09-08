@@ -4,21 +4,18 @@ using Microsoft.Extensions.Configuration;
 namespace Merchant.Feeds;
 
 /// <summary>
-/// Reads single values out of a config section, saying what is wrong rather than throwing.
+/// Reads single settings, saying what is wrong rather than throwing.
 ///
-/// <see cref="ConfigurationBinder"/> would do most of this in one line, but it answers a bad value
-/// with an exception naming a CLR type, and the person who will read that message is editing a
-/// settings file by hand and has never seen this code. Every failure here names the field and what
-/// was expected instead.
+/// <see cref="ConfigurationBinder"/> would do this in one line, but answers a bad value with an
+/// exception naming a CLR type. The person reading that message is editing a file by hand and has
+/// never seen this code, so every failure here names the field and what was expected.
 /// </summary>
 public static class ConfigRead
 {
     /// <summary>A required string. Reports its absence and returns null.</summary>
     public static string? Required(IConfigurationSection section, string key, ICollection<string> errors)
     {
-        string? value = section[key]?.Trim();
-
-        if (string.IsNullOrEmpty(value))
+        if (Optional(section, key) is not { } value)
         {
             errors.Add($"{key} is missing.");
             return null;
@@ -82,7 +79,10 @@ public static class ConfigRead
         return value;
     }
 
-    /// <summary>An optional enum member, named as it is spelled in the enum.</summary>
+    /// <summary>
+    /// An optional enum member, named as the enum spells it. Spaces are ignored, so a value that
+    /// reads naturally in the file — <c>Deal Rating</c> — matches <c>DealRating</c>.
+    /// </summary>
     public static TEnum Enum<TEnum>(
         IConfigurationSection section, string key, TEnum fallback, ICollection<string> errors)
         where TEnum : struct, Enum
@@ -92,7 +92,7 @@ public static class ConfigRead
             return fallback;
         }
 
-        if (!System.Enum.TryParse(raw, ignoreCase: true, out TEnum value)
+        if (!System.Enum.TryParse(raw.Replace(" ", string.Empty), ignoreCase: true, out TEnum value)
             || !System.Enum.IsDefined(value))
         {
             errors.Add(
@@ -103,9 +103,7 @@ public static class ConfigRead
         return value;
     }
 
-    /// <summary>
-    /// An optional embed colour, written the way a person writes one: <c>#1B2838</c>.
-    /// </summary>
+    /// <summary>An optional embed colour, written the way a person writes one: <c>#1B2838</c>.</summary>
     public static uint Colour(IConfigurationSection section, string key, uint fallback, ICollection<string> errors)
     {
         if (Optional(section, key) is not { } raw)
@@ -134,4 +132,39 @@ public static class ConfigRead
             .Select(child => child.Value?.Trim())
             .OfType<string>()
             .Where(value => value.Length > 0)];
+
+    /// <summary>
+    /// Reports settings that are not in the schema. A misspelled key is otherwise the worst mistake
+    /// this file can hold: it is ignored in silence, and the default left in its place looks
+    /// deliberate.
+    /// </summary>
+    /// <param name="known">Everything recognised here.</param>
+    /// <param name="what">How the thing being read reads in a sentence, e.g. <c>a feed</c>.</param>
+    /// <param name="errors">Appended to, one line per key.</param>
+    /// <param name="offered">
+    /// What to name as the alternatives, when that is narrower than <paramref name="known"/> — a key
+    /// recognised only so it can be refused should not be suggested to somebody fixing a typo.
+    /// </param>
+    /// <returns>How many were reported.</returns>
+    public static int Unknown(
+        IConfigurationSection section,
+        IReadOnlyList<string> known,
+        string what,
+        ICollection<string> errors,
+        IReadOnlyList<string>? offered = null)
+    {
+        int found = 0;
+
+        foreach (IConfigurationSection child in section.GetChildren())
+        {
+            if (!known.Contains(child.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                errors.Add($"there is no setting '{child.Key}' — " +
+                           $"{what} takes {string.Join(", ", offered ?? known)}.");
+                found++;
+            }
+        }
+
+        return found;
+    }
 }

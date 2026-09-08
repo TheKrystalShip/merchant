@@ -36,8 +36,9 @@
 //   "source": { "type": "cheapshark", … }       always priced in USD, whatever the region is
 //     "upperPrice"   optional  number above 0   sale-price ceiling           default: no ceiling
 //     "minMetacritic" optional number, 0-100    review-score floor           default: no floor
-//     "sortBy"       optional  one of: Deal Rating, Title, Savings, Price, Metacritic, Reviews,
-//                              Release, Store, Recent                        default: Deal Rating
+//     "sortBy"       optional  one of: DealRating, Title, Savings, Price, Metacritic, Reviews,
+//                              Release, Store, Recent. Spaces are ignored, so "Deal Rating"
+//                              is read the same way                          default: DealRating
 //
 // A feed with a mistake in it is dropped at startup with a line naming it and what was expected;
 // every other feed keeps running. A file with no usable feeds at all stops merchant.
@@ -78,7 +79,7 @@
       "source": {
         "type": "cheapshark",
         "upperPrice": 10,
-        "sortBy": "Deal Rating"
+        "sortBy": "DealRating"
       }
     },
 

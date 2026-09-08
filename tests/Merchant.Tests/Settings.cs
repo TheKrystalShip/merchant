@@ -43,13 +43,13 @@ internal static class Settings
     /// <summary>The catalog the shipped example describes.</summary>
     public static FeedCatalog Example(out CatalogReport report) =>
         FeedCatalog.Load(
-            new ConfigurationBuilder().AddJsonFile(ExamplePath).Build().GetSection("feeds"),
+            new ConfigurationBuilder().AddJsonFile(ExamplePath).Build().GetSection(Schema.Feeds),
             Registry,
             out report);
 
     /// <summary>The catalog a settings document describes.</summary>
     public static FeedCatalog From(string json, out CatalogReport report) =>
-        FeedCatalog.Load(Read(json).GetSection("feeds"), Registry, out report);
+        FeedCatalog.Load(Read(json).GetSection(Schema.Feeds), Registry, out report);
 
     /// <summary>Reads a settings document without writing it to disk first.</summary>
     public static IConfigurationRoot Read(string json) => new ConfigurationBuilder()
@@ -57,5 +57,6 @@ internal static class Settings
         .Build();
 
     /// <summary>One feed object, wrapped in the document that would carry it.</summary>
-    public static string Feed(string body) => "{ \"feeds\": { \"example\": " + body + " } }";
+    public static string Feed(string body) =>
+        $$"""{ "{{Schema.Feeds}}": { "example": """ + body + " } }";
 }

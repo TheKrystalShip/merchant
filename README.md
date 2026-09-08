@@ -140,7 +140,7 @@ ok   under-10        20 items    680 ms  Games Under $10
 ## Development
 
 ```bash
-dotnet test        # 114 tests, no network
+dotnet test        # 123 tests, no network
 dotnet run --project src/Merchant -- --check
 ```
 
@@ -192,7 +192,7 @@ these embeds can strike through a list price. Always quoted in USD, whatever the
 | --------------- | -------- | -------------------- | ------------- |
 | `upperPrice`    | no       | number above 0       | no ceiling    |
 | `minMetacritic` | no       | number, 0–100        | no floor      |
-| `sortBy`        | no       | `Deal Rating`, `Title`, `Savings`, `Price`, `Metacritic`, `Reviews`, `Release`, `Store` or `Recent` | `Deal Rating` |
+| `sortBy`        | no       | `DealRating`, `Title`, `Savings`, `Price`, `Metacritic`, `Reviews`, `Release`, `Store` or `Recent`. Spaces are ignored, so `Deal Rating` reads the same. | `DealRating` |
 
 ### After an edit
 

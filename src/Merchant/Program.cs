@@ -38,7 +38,8 @@ List<string> problems = [];
 BotOptions options = BotOptions.Load(config, problems);
 
 SourceRegistry registry = new([new RssSourceFactory(), new CheapSharkSourceFactory()]);
-FeedCatalog catalog = FeedCatalog.Load(config.GetSection("feeds"), registry, out CatalogReport report);
+FeedCatalog catalog = FeedCatalog.Load(
+    config.GetSection(Schema.Feeds), registry, out CatalogReport report);
 
 // Said once, on stderr, before any logger exists — this is the output somebody stares at after
 // editing the file, and every line names the feed and what to fix.

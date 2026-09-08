@@ -8,11 +8,8 @@ namespace Merchant;
 ///
 /// A feed bot's failures are nearly all upstream and nearly all silent — a source changes shape,
 /// starts rate-limiting, or moves. This turns that into one command that either says every feed is
-/// answering or names the one that is not, and it needs no bot token to run.
-///
-/// Since the catalog became a file, this is also how an edit gets checked: the settings file has
-/// already been read and validated by the time it runs, so a typo shows up as a named error here
-/// rather than as a channel that quietly stops posting.
+/// answering or names the one that is not, and it needs no bot token to run. The settings file has
+/// been read and validated by the time it runs, so it is equally how an edit gets checked.
 /// </summary>
 public static class Preflight
 {

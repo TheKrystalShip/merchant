@@ -1,21 +1,19 @@
 using Merchant.Discord;
 using Merchant.Feeds;
+using Merchant.Feeds.Factories;
 using Merchant.Sources;
 using Xunit;
 
 namespace Merchant.Tests;
 
 /// <summary>
-/// The catalog is a file now, so this is where the file is held to account: that the shipped
-/// example still describes the five feeds merchant used to carry in code, and that a hand-edited
-/// mistake is answered with a sentence naming the feed rather than a stack trace or silence.
+/// Where the settings file is held to account: that the shipped example describes the catalog
+/// merchant is meant to post, and that a hand-edited mistake is answered with a sentence naming the
+/// feed rather than with a stack trace or with silence.
 /// </summary>
 public class FeedCatalogTests
 {
-    /// <summary>
-    /// What the catalog was when it lived in <c>Catalog.cs</c>. This is the whole point of the
-    /// change: the feeds moved into a file without any of them changing on the way.
-    /// </summary>
+    /// <summary>The catalog merchant ships, which the example is expected to describe exactly.</summary>
     public static TheoryData<string, string, string, Cadence, uint, string> Shipped => new()
     {
         { "top-week", "Top Games of the Week", "top-games-of-the-week", Cadence.Weekly, 0x1B2838, "rss" },
@@ -27,7 +25,7 @@ public class FeedCatalogTests
 
     [Theory]
     [MemberData(nameof(Shipped))]
-    public void The_example_still_describes_the_catalog_that_used_to_be_code(
+    public void The_example_describes_the_catalog_merchant_ships(
         string key, string label, string channel, Cadence cadence, uint colour, string type)
     {
         FeedCatalog catalog = Settings.Example(out _);
@@ -229,6 +227,47 @@ public class FeedCatalogTests
 
         Assert.StartsWith("feed 'Free Games':", complaint, StringComparison.Ordinal);
         Assert.Contains("hyphens", complaint, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A key that is not in the schema is the worst mistake this file can hold: ignored in silence,
+    /// with the default left in its place looking deliberate. "color" is the one to expect.
+    /// </summary>
+    [Theory]
+    [InlineData("""{ "label": "L", "description": "D", "color": "#112233", "source": { "type": "rss", "urls": [ "https://e.test/f" ] } }""", "color")]
+    [InlineData("""{ "label": "L", "description": "D", "frequency": "Daily", "source": { "type": "rss", "urls": [ "https://e.test/f" ] } }""", "frequency")]
+    [InlineData("""{ "label": "L", "description": "D", "source": { "type": "rss", "url": "https://e.test/f" } }""", "url")]
+    [InlineData("""{ "label": "L", "description": "D", "source": { "type": "cheapshark", "maxPrice": 10 } }""", "maxPrice")]
+    public void A_setting_that_does_not_exist_is_reported_rather_than_ignored(string feed, string misspelt)
+    {
+        Settings.From(Settings.Feed(feed), out CatalogReport report);
+
+        Assert.Contains(report.Errors, error =>
+            error.Contains($"there is no setting '{misspelt}'", StringComparison.Ordinal));
+        Assert.Equal(0, report.Loaded);
+    }
+
+    [Theory]
+    [InlineData("DealRating")]
+    // CheapShark spells its own sort keys with spaces, so the file may too.
+    [InlineData("Deal Rating")]
+    [InlineData("savings")]
+    public void A_sort_key_is_taken_however_it_is_spelled(string sortBy)
+    {
+        FeedCatalog catalog = Settings.From(Settings.Feed($$"""
+            { "label": "L", "description": "D",
+              "source": { "type": "cheapshark", "sortBy": "{{sortBy}}" } }
+            """), out CatalogReport report);
+
+        Assert.Empty(report.Errors);
+        Assert.NotNull(catalog.Find("example"));
+    }
+
+    [Fact]
+    public void The_sort_enum_carries_the_value_CheapShark_expects()
+    {
+        Assert.Equal("Deal Rating", CheapSharkSort.DealRating.Query());
+        Assert.Equal("Savings", CheapSharkSort.Savings.Query());
     }
 
     [Fact]

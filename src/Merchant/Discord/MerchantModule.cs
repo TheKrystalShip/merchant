@@ -1,5 +1,6 @@
 using System.Text;
 using Merchant.Feeds;
+using Merchant.Feeds.Factories;
 using Merchant.Sources;
 using Discord;
 using Discord.Interactions;
@@ -248,9 +249,9 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
             .WithColor(new Color(0xC24A12))
             .WithFooter("/merchant add · /merchant list · /merchant remove · /merchant preview · /merchant region");
 
-        // Discord refuses an embed with more than 25 fields, so a long catalog shows the first
-        // 25 rather than failing the command outright.
-        foreach (Category category in _catalog.All.Take(25))
+        // Discord refuses an embed carrying more fields than this, so a long catalog shows what
+        // fits rather than failing the command outright.
+        foreach (Category category in _catalog.All.Take(EmbedBuilder.MaxFieldCount))
         {
             embed.AddField(
                 category.Label,
@@ -288,13 +289,13 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
     }
 
     /// <summary>
-    /// The caveat about US dollars, named from the catalog rather than from memory: the feeds it
-    /// applies to are whichever ones are backed by CheapShark, which quotes USD and nothing else.
+    /// The caveat about US dollars, named from the catalog rather than from memory: it applies to
+    /// whichever feeds are backed by CheapShark, which quotes USD and nothing else.
     /// </summary>
     private string UsdCaveat()
     {
         string[] priced = [.. _catalog.All
-            .Where(c => _catalog.SourceType(c.Key) == "cheapshark")
+            .Where(c => _catalog.SourceType(c.Key) == CheapSharkSourceFactory.TypeName)
             .Select(c => $"*{c.Label}*")];
 
         return priced.Length == 0

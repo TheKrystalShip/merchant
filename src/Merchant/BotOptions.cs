@@ -1,13 +1,14 @@
+using Merchant.Feeds;
 using Microsoft.Extensions.Configuration;
 
 namespace Merchant;
 
 /// <summary>
-/// Everything merchant needs to run, from the <c>bot</c> section of the settings file.
+/// Everything merchant needs to run, from the <see cref="Schema.Bot"/> section.
 ///
-/// The token is deliberately not here. It is the one secret merchant holds, it is read straight
-/// from the environment where the unit file and the container already put it, and keeping it out of
-/// this object keeps it out of the container that every command can reach into.
+/// The token is not here. It is the one secret merchant holds, it is read straight from the
+/// environment where the unit file and the container already put it, and keeping it out of this
+/// object keeps it out of the container every command can reach into.
 /// </summary>
 public sealed class BotOptions
 {
@@ -31,56 +32,63 @@ public sealed class BotOptions
 
     /// <summary>
     /// A single guild to register commands into. Guild commands appear the moment they are
-    /// registered, where global ones take up to an hour, so this is what makes testing bearable.
-    /// Unset means register globally.
+    /// registered, where global ones take up to an hour. Unset means register globally.
     /// </summary>
     public ulong? DevGuildId { get; init; }
 
     /// <summary>
-    /// Reads the <c>bot</c> section. Every setting has a working default, so an absent section is
-    /// not an error — a settings file that names only feeds is a perfectly good settings file.
+    /// Reads the <see cref="Schema.Bot"/> section. Every setting has a working default, so an absent
+    /// section is not an error — a file that names only feeds is a perfectly good settings file.
     /// </summary>
     /// <param name="config">The whole configuration.</param>
-    /// <param name="problems">Appended to when a value could not be read; the defaults stand.</param>
+    /// <param name="problems">Appended to when a value cannot be read; the defaults stand.</param>
     public static BotOptions Load(IConfiguration config, ICollection<string> problems)
     {
-        IConfigurationSection bot = config.GetSection("bot");
+        IConfigurationSection bot = config.GetSection(Schema.Bot);
 
-        if (bot["token"] is { Length: > 0 })
+        ConfigRead.Unknown(
+            bot, Schema.BotKeys.All, $"the {Schema.Bot} section", problems, Schema.BotKeys.Offered);
+
+        if (bot[Schema.BotKeys.Token] is { Length: > 0 })
         {
             problems.Add(
-                $"bot.token is ignored and should be deleted — the token is read from " +
-                $"{TokenVariable} so it never sits in a file that gets copied around.");
+                $"{Schema.Bot}.{Schema.BotKeys.Token} is ignored and should be deleted — the token " +
+                $"is read from {TokenVariable} so it never sits in a file that gets copied around.");
         }
 
-        int minutes = Feeds.ConfigRead.Int(bot, "sweepMinutes", problems) ?? 30;
+        int minutes = ConfigRead.Int(bot, Schema.BotKeys.SweepMinutes, problems)
+                      ?? Schema.Defaults.SweepMinutes;
 
-        if (minutes is < 5 or > 720)
+        if (minutes is < Schema.Limits.MinSweepMinutes or > Schema.Limits.MaxSweepMinutes)
         {
-            problems.Add($"bot.sweepMinutes should be between 5 and 720; using 30 instead of {minutes}.");
-            minutes = 30;
+            problems.Add(
+                $"{Schema.Bot}.{Schema.BotKeys.SweepMinutes} should be between " +
+                $"{Schema.Limits.MinSweepMinutes} and {Schema.Limits.MaxSweepMinutes}; " +
+                $"using {Schema.Defaults.SweepMinutes} instead of {minutes}.");
+
+            minutes = Schema.Defaults.SweepMinutes;
         }
 
         return new BotOptions
         {
-            DatabasePath = Feeds.ConfigRead.Optional(bot, "databasePath") ?? "merchant.db",
+            DatabasePath = ConfigRead.Optional(bot, Schema.BotKeys.DatabasePath)
+                ?? Schema.Defaults.DatabasePath,
             SweepInterval = TimeSpan.FromMinutes(minutes),
-            UserAgent = Feeds.ConfigRead.Optional(bot, "userAgent")
-                ?? "merchant/1.0 (Discord game-deal announcer; +https://github.com/TheKrystalShip/merchant)",
+            UserAgent = ConfigRead.Optional(bot, Schema.BotKeys.UserAgent) ?? Schema.Defaults.UserAgent,
             DevGuildId = ReadGuild(bot, problems),
         };
     }
 
     private static ulong? ReadGuild(IConfigurationSection bot, ICollection<string> problems)
     {
-        if (Feeds.ConfigRead.Optional(bot, "devGuildId") is not { } raw)
+        if (ConfigRead.Optional(bot, Schema.BotKeys.DevGuildId) is not { } raw)
         {
             return null;
         }
 
         if (!ulong.TryParse(raw, out ulong guild) || guild == 0)
         {
-            problems.Add($"bot.devGuildId should be a Discord server id, not '{raw}'.");
+            problems.Add($"{Schema.Bot}.{Schema.BotKeys.DevGuildId} should be a Discord server id, not '{raw}'.");
             return null;
         }
 

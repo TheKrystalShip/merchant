@@ -44,8 +44,8 @@ MerchantModule ─ /merchant add · list · remove · preview · region · help 
 
 **The catalog is the product.** A person picks "Games Under $10", not a URL, a filter and a poll
 interval. If a change would make somebody paste a feed URL into a *command*, it is the wrong change —
-that is the thing merchant exists to avoid. Around five entries is still the right size, but that is
-now a curation guideline for whoever edits the settings file, not something the code enforces.
+that is the thing merchant exists to avoid. Around five entries is the right size: a curation
+guideline for whoever edits the settings file, not something the code enforces.
 
 **The catalog is data, and drivers are code.** Nothing in this assembly knows what a feed is: URLs,
 filters, labels, colours and cadences all live in `appsettings.json`, and adding one is an edit and a
@@ -55,12 +55,21 @@ class in `Feeds/Factories` and one line in `Program.cs`, with no switch anywhere
 Resist a generic JSON-mapping driver until something actually needs it; that trades a rebuild for a
 mini-language living in a settings file.
 
-**The feed menu is autocompleted, not registered.** Discord is told a command's choices once, when
-it is registered, so a compile-time `enum` was the only way to have a real dropdown — and it made the
-catalog impossible to move out of the code. `FeedAutocomplete` is asked on every keystroke including
-the empty one, so the list still appears the moment the field is focused, and editing the settings
-file never requires re-registering a command. The cost is that free text is submittable: `add` and
-`preview` answer an unknown feed by naming what does exist.
+**The feed menu is autocompleted, not registered.** Discord is told a command's fixed choices once,
+when it is registered, so an `enum` of feeds would pin the catalog inside the assembly.
+`FeedAutocomplete` is asked on every keystroke including the empty one, so the list appears the
+moment the field is focused, and editing the settings file never requires re-registering a command.
+The cost is that free text is submittable: `add` and `preview` answer an unknown feed by naming what
+does exist.
+
+**The settings vocabulary lives in `Feeds/Schema.cs`.** Every key the file may contain, every bound
+it is held to, and every default it falls back to is a constant there, and the reader, the validation
+and the error messages all name their fields from it. No key is written as a literal anywhere else,
+so the file format cannot be described in one place and read in another. A driver's own options are
+the exception it owns: a factory declares its keys and binds them into a typed record
+(`RssOptions`, `CheapSharkOptions`), and anything with a closed set of values is an enum —
+`CheapSharkSort` rather than a string, so the sort keys are visible in code and a misspelling is
+caught at startup instead of silently reordering a feed.
 
 **Config children come back sorted by key, not in document order.** `ConfigurationProvider.GetChildKeys`
 sorts with `ConfigurationKeyComparer`, so the file's own order cannot be relied on. The menus order
@@ -125,7 +134,7 @@ hitting it has no access to the logs.
 
 ```bash
 dotnet build
-dotnet test                                    # 114 tests, no network
+dotnet test                                    # 123 tests, no network
 dotnet run --project src/Merchant -- --check      # validate the settings file, fetch every feed
 dotnet run --project src/Merchant -- --check ES   # …for another region
 ```
@@ -148,19 +157,19 @@ Hand-written fixtures agree with the parser by construction and prove nothing. R
 the live feeds when a source changes shape.
 
 `FeedCatalogTests` holds the settings file to account rather than the code. Its theory data is the
-catalog as it stood when it lived in `Catalog.cs` — the five feeds, their labels, channels, cadences,
-colours and source types — so the shipped example cannot drift from what merchant used to post. The
-rest of it asserts that every rejection names its feed and what was expected, because that message is
-the entire interface for somebody with a text editor and no access to this repository.
+catalog merchant ships — the five feeds, their labels, channels, cadences, colours and source types —
+so the shipped example cannot drift from what the bot is meant to post. The rest of it asserts that
+every rejection names its feed and what was expected, because that message is the entire interface
+for somebody with a text editor and no access to this repository.
 
 ## Adding a feed
 
 Edit `appsettings.json` and restart. No code, no rebuild, no command re-registration.
 
-The schema is written down twice on purpose: in the comment header of `deploy/appsettings.example.jsonc`,
-which is the file a fresh install is seeded with and the one somebody has open while editing, and in
-the README's *Editing the feeds* section. A new field, or a new value for an existing one, belongs in
-both — and in `FeedCatalog.Load`, which is the only place that decides what a field means.
+The schema is written down in three places, each for a different reader: `Feeds/Schema.cs` for the
+code, the comment header of `deploy/appsettings.example.jsonc` for whoever has the file open, and the
+README's *Editing the feeds* section for whoever has not opened it yet. A new field, or a new value
+for an existing one, belongs in all three.
 
 Adding a new *kind* of source is a class in `Feeds/Factories` implementing `ISourceFactory` and a
 `AddSingleton<ISourceFactory, …>()` in `Program.cs`. It returns an `ISourceBlueprint`, which is a
