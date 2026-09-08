@@ -12,7 +12,9 @@ namespace Merchant;
 /// </summary>
 public sealed class BotOptions
 {
-    /// <summary>Named client for outbound feed fetches, so the user agent is set in exactly one place.</summary>
+    /// <summary>
+    /// Named client for outbound feed fetches, so the user agent is set in exactly one place.
+    /// </summary>
     public const string HttpClientName = "feeds";
 
     /// <summary>The environment variable the Discord bot token is read from.</summary>
@@ -93,7 +95,8 @@ public sealed class BotOptions
 
         if (!ulong.TryParse(raw, out ulong guild) || guild == 0)
         {
-            problems.Add($"{Schema.Bot}.{Schema.BotKeys.DevGuildId} should be a Discord server id, not '{raw}'.");
+            problems.Add(
+                $"{Schema.Bot}.{Schema.BotKeys.DevGuildId} should be a Discord server id, not '{raw}'.");
             return null;
         }
 

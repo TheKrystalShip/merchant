@@ -28,6 +28,27 @@ jobs:
       - name: Check formatting
         run: dotnet format --verify-no-changes --no-restore
 
+      # .editorconfig sets a line length, and it is the one rule in it no analyzer can report:
+      # Roslyn has no line-length rule and the formatter does not wrap. Checked here so the whole of
+      # the style is still the build's job rather than review's.
+      - name: Check line length
+        run: |
+          python3 - <<'CHECK'
+          import pathlib, sys
+
+          limit = 110
+          over = [f"{path}:{n} is {len(line)} characters"
+                  for path in sorted(pathlib.Path("src").rglob("*.cs"))
+                  if not {"obj", "bin"} & set(path.parts)
+                  for n, line in enumerate(path.read_text().splitlines(), 1)
+                  if len(line) > limit]
+
+          if over:
+              print(f"Longer than the {limit} characters .editorconfig allows:")
+              print(*over, sep="\n")
+              sys.exit(1)
+          CHECK
+
       - name: Build
         run: dotnet build -c Release --no-restore
 

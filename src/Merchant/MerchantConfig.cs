@@ -13,7 +13,9 @@ namespace Merchant;
 /// </summary>
 public static class MerchantConfig
 {
-    /// <summary>Overrides where the settings file is read from. The container points it at the volume.</summary>
+    /// <summary>
+    /// Overrides where the settings file is read from. The container points it at the volume.
+    /// </summary>
     public const string PathVariable = "MERCHANT_CONFIG";
 
     /// <summary>The settings file, under a directory of merchant's own.</summary>
@@ -37,7 +39,9 @@ public static class MerchantConfig
         ("MERCHANT_DEV_GUILD", $"{Schema.Bot}:{Schema.BotKeys.DevGuildId}"),
     ];
 
-    /// <summary>Where the settings file lives: <c>$MERCHANT_CONFIG</c>, else the XDG config directory.</summary>
+    /// <summary>
+    /// Where the settings file lives: <c>$MERCHANT_CONFIG</c>, else the XDG config directory.
+    /// </summary>
     public static string ResolvePath()
     {
         if (Environment.GetEnvironmentVariable(PathVariable) is { Length: > 0 } explicitPath)

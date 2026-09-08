@@ -41,7 +41,8 @@ public static class Preflight
             string mark = items.Count > 0 ? "ok  " : "EMPTY";
             healthy &= items.Count > 0;
 
-            Console.WriteLine($"{mark} {category.Key,-14} {items.Count,3} items  {ms,5} ms  {category.Label}");
+            Console.WriteLine(
+                $"{mark} {category.Key,-14} {items.Count,3} items  {ms,5} ms  {category.Label}");
 
             if (items.Count > 0)
             {

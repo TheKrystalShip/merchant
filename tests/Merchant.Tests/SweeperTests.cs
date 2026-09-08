@@ -81,9 +81,13 @@ public class SweeperTests : IDisposable
         Assert.Contains(_network.Urls, url => url.EndsWith("region=ES", StringComparison.Ordinal));
     }
 
-    private sealed class OneClient(HttpMessageHandler handler) : IHttpClientFactory
+    private sealed class OneClient : IHttpClientFactory
     {
-        public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
+        private readonly HttpMessageHandler _handler;
+
+        public OneClient(HttpMessageHandler handler) => _handler = handler;
+
+        public HttpClient CreateClient(string name) => new(_handler, disposeHandler: false);
     }
 
     private sealed class CountingHandler : HttpMessageHandler

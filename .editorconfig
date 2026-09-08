@@ -21,6 +21,8 @@ trim_trailing_whitespace = false
 indent_size = 2
 
 [*.cs]
+# No analyzer enforces this — Roslyn has no line-length rule and `dotnet format` does not wrap — so
+# CI checks it directly, next to the rules that do enforce themselves. An editor reads it from here.
 max_line_length = 110
 
 # ---- namespaces and usings -------------------------------------------------------------------
@@ -43,6 +45,9 @@ csharp_style_var_elsewhere = false:warning
 csharp_style_expression_bodied_methods = when_on_single_line:silent
 csharp_style_expression_bodied_properties = when_on_single_line:silent
 csharp_style_expression_bodied_accessors = when_on_single_line:silent
+# A constructor is written out. The option only ever suppresses the offer to convert one — nothing
+# reports a primary constructor that is already there — so this is honoured by hand, and a class
+# taking its dependencies into readonly fields is what the rest of the tree looks like.
 csharp_style_prefer_primary_constructors = false:silent
 csharp_prefer_braces = true:warning
 csharp_style_prefer_pattern_matching = true:suggestion
@@ -109,6 +114,10 @@ dotnet_diagnostic.CS1591.severity = suggestion
 # ---- tests -------------------------------------------------------------------------------------
 
 [tests/**.cs]
+# A theory row is a settings document, and one per line is what makes the set readable as a table of
+# the mistakes the file is held to. Wrapping them hides the case each one is testing.
+max_line_length = off
+
 # A test is named as the sentence it asserts — Subscribing_twice_updates_rather_than_duplicates —
 # because the runner's output is then a list of the things merchant is known to do. That reads
 # better than any PascalCase spelling of the same words, and the rule exists for public API surface

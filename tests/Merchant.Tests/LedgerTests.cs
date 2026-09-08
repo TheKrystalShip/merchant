@@ -135,13 +135,33 @@ public class LedgerTests : IDisposable
     }
 
     [Fact]
-    public void Pending_comes_back_newest_first_and_capped()
+    public void Pending_keeps_the_order_the_source_offered_and_caps()
     {
+        // Every source promises its best or newest first, and that order decides what a digest
+        // lists and what a capped burst picks. Handing it back reversed means a live channel gets
+        // the four least interesting items and a digest leads with them.
         (long id, _) = _ledger.Subscribe(1, 2, "under-10", Cadence.Daily, null);
         _ledger.Record(id, [Item("a"), Item("b"), Item("c"), Item("d")], alreadyPosted: false);
 
-        Assert.Equal(2, _ledger.Pending(id, 2).Count);
-        Assert.Equal(4, _ledger.Pending(id, 50).Count);
+        Assert.Equal(["a", "b", "c", "d"], _ledger.Pending(id, 50).Select(i => i.Id));
+        Assert.Equal(["a", "b"], _ledger.Pending(id, 2).Select(i => i.Id));
+    }
+
+    [Fact]
+    public void A_later_sweep_comes_before_an_earlier_one()
+    {
+        // Across sweeps the newest find leads, and within one the source's own order holds. It only
+        // works because a sweep stamps one first_seen for the whole batch: a stamp per row is
+        // unique, so the rowid tiebreaker never runs and the batch comes back inside out.
+        (long id, _) = _ledger.Subscribe(1, 2, "under-10", Cadence.Daily, null);
+
+        _ledger.Record(id, [Item("old-1"), Item("old-2")], alreadyPosted: false);
+        Thread.Sleep(10);
+        _ledger.Record(id, [Item("new-1"), Item("new-2")], alreadyPosted: false);
+
+        Assert.Equal(
+            ["new-1", "new-2", "old-1", "old-2"],
+            _ledger.Pending(id, 50).Select(i => i.Id));
     }
 
     [Fact]

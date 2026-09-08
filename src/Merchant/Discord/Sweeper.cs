@@ -58,7 +58,8 @@ public sealed class Sweeper : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // Nothing can be posted before the gateway hands over the guild and channel caches.
-        while (!stoppingToken.IsCancellationRequested && _discord.ConnectionState != ConnectionState.Connected)
+        while (!stoppingToken.IsCancellationRequested
+               && _discord.ConnectionState != ConnectionState.Connected)
         {
             await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
         }
@@ -131,9 +132,11 @@ public sealed class Sweeper : BackgroundService
         Category? category = _catalog.Find(subscription.CategoryKey);
         if (category is null)
         {
-            // The feed was removed from the settings file while a channel was still subscribed to
-            // it. Skipping is right — nothing can be fetched — and /merchant list shows the row as
-            // retired so somebody can clear it.
+            // A channel is subscribed to a feed the settings file does not describe. Skipping is
+            // right — there is nothing to fetch and no label or colour to post under — and
+            // /merchant list shows the row as retired so somebody can clear it. Whatever was
+            // pending when the feed left the file stays pending and stops growing, because this
+            // returns before anything else is filed.
             _log.LogWarning("Subscription {Id} names feed '{Key}', which is not in the catalog.",
                 subscription.Id, subscription.CategoryKey);
             return;
@@ -149,25 +152,27 @@ public sealed class Sweeper : BackgroundService
             fetched[slot] = items;
         }
 
-        if (items.Count == 0)
+        // An empty answer files nothing, but it must not stop the channel posting: a daily digest
+        // whose window opened while its upstream was briefly down is owed a post from the backlog
+        // the last sweep filed, and skipping to the next sweep would hold it behind an outage it
+        // has nothing to do with.
+        if (items.Count > 0)
         {
-            return;
-        }
-
-        if (_ledger.IsUnswept(subscription.Id))
-        {
-            // First contact. The backlog is filed silently, but a handful goes out immediately:
-            // a channel that stays empty for a day after setup reads as a bot that does not work.
-            IReadOnlyList<FeedItem> opener = [.. items.Take(Announcer.LiveBurst)];
-            _ledger.Record(subscription.Id, opener, alreadyPosted: false);
-            _ledger.Record(subscription.Id, items.Skip(opener.Count), alreadyPosted: true);
-        }
-        else
-        {
-            int added = _ledger.Record(subscription.Id, items, alreadyPosted: false);
-            if (added > 0)
+            if (_ledger.IsUnswept(subscription.Id))
             {
-                _log.LogDebug("Subscription {Id}: {Count} new item(s).", subscription.Id, added);
+                // First contact. The backlog is filed silently, but a handful goes out immediately:
+                // a channel that stays empty for a day after setup reads as a bot that does not work.
+                IReadOnlyList<FeedItem> opener = [.. items.Take(Announcer.LiveBurst)];
+                _ledger.Record(subscription.Id, opener, alreadyPosted: false);
+                _ledger.Record(subscription.Id, items.Skip(opener.Count), alreadyPosted: true);
+            }
+            else
+            {
+                int added = _ledger.Record(subscription.Id, items, alreadyPosted: false);
+                if (added > 0)
+                {
+                    _log.LogDebug("Subscription {Id}: {Count} new item(s).", subscription.Id, added);
+                }
             }
         }
 
@@ -222,6 +227,10 @@ public sealed class Sweeper : BackgroundService
 
         string? mention = subscription.MentionRoleId is { } role ? MentionUtils.MentionRole(role) : null;
 
+        // What actually reached the channel, rather than what was meant to. A burst is several
+        // messages, and one of them can be refused while the ones before it are already up.
+        List<string> delivered = [];
+
         try
         {
             if (subscription.Cadence == Cadence.Live)
@@ -230,6 +239,7 @@ public sealed class Sweeper : BackgroundService
                 foreach (FeedItem item in pending.Reverse())
                 {
                     await channel.SendMessageAsync(text: mention, embed: Announcer.Item(category, item));
+                    delivered.Add(item.Id);
                     mention = null; // Ping once per burst, not once per deal.
                 }
             }
@@ -238,20 +248,29 @@ public sealed class Sweeper : BackgroundService
                 string period = subscription.Cadence == Cadence.Weekly ? "this week" : "today";
                 await channel.SendMessageAsync(
                     text: mention, embed: Announcer.Digest(category, pending, period));
+
+                delivered.AddRange(pending.Select(i => i.Id));
             }
         }
         catch (global::Discord.Net.HttpException ex)
         {
             // Missing Send Messages or Embed Links in that channel is the overwhelmingly common
-            // cause. Leave the backlog unposted so it goes out once the permission is fixed.
+            // cause. Whatever did not go out stays pending, so it lands once the permission is fixed.
             _log.LogWarning(ex, "Could not post to channel {Channel} for subscription {Id}.",
                 subscription.ChannelId, subscription.Id);
-            return;
         }
-
-        _ledger.MarkFlushed(subscription.Id, pending.Select(i => i.Id), DateTimeOffset.UtcNow);
-        _log.LogInformation("Posted {Count} item(s) to {Channel} for {Category}.",
-            pending.Count, subscription.ChannelId, category.Key);
+        finally
+        {
+            // Marked in a finally, and only what went out: a burst refused on its third message has
+            // already put two in the channel, and leaving those pending posts them a second time on
+            // the next sweep.
+            if (delivered.Count > 0)
+            {
+                _ledger.MarkFlushed(subscription.Id, delivered, DateTimeOffset.UtcNow);
+                _log.LogInformation("Posted {Count} item(s) to {Channel} for {Category}.",
+                    delivered.Count, subscription.ChannelId, category.Key);
+            }
+        }
     }
 
     /// <summary>

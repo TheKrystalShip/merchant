@@ -54,11 +54,15 @@ public sealed class RssSourceFactory : ISourceFactory
         return errors.Count == before ? new Blueprint(new RssOptions(urls)) : null;
     }
 
-    private sealed class Blueprint(RssOptions options) : ISourceBlueprint
+    private sealed class Blueprint : ISourceBlueprint
     {
+        private readonly RssOptions _options;
+
+        public Blueprint(RssOptions options) => _options = options;
+
         public string Type => TypeName;
 
         public ISource Build(HttpClient http, GuildSettings settings) =>
-            new RssSource(http, [.. options.Urls.Select(url => Template.Fill(url, settings))]);
+            new RssSource(http, [.. _options.Urls.Select(url => Template.Fill(url, settings))]);
     }
 }

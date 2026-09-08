@@ -75,12 +75,16 @@ public sealed class CheapSharkSourceFactory : ISourceFactory
             : null;
     }
 
-    private sealed class Blueprint(CheapSharkOptions options) : ISourceBlueprint
+    private sealed class Blueprint : ISourceBlueprint
     {
+        private readonly CheapSharkOptions _options;
+
+        public Blueprint(CheapSharkOptions options) => _options = options;
+
         public string Type => TypeName;
 
         public ISource Build(HttpClient http, GuildSettings settings) => new CheapSharkSource(
-            http, options.UpperPrice, options.MinMetacritic, options.SortBy.Query());
+            http, _options.UpperPrice, _options.MinMetacritic, _options.SortBy.Query());
     }
 }
 

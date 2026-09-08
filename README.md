@@ -44,7 +44,7 @@ The commands default to **Manage Server**; change that in _Server Settings → I
 | `/merchant list`    | What is posting where, and how much is waiting.                         |
 | `/merchant remove`  | Stop one feed, by the number `/merchant list` shows.                    |
 | `/merchant preview` | See what a feed would post, before wiring it up. Only you see it.       |
-| `/merchant region`  | Set the country and currency used for prices.                           |
+| `/merchant region`  | Set the country and currency used for prices. Two letters and three.    |
 | `/merchant help`    | The catalog, with a suggested channel name for each feed.               |
 
 `/merchant add` checks that merchant can actually post in the target channel **before** it saves
@@ -143,6 +143,8 @@ and the container pass them.
 ```bash
 merchant --check        # or: merchant --check ES
 ```
+
+The country is two letters and nothing else; anything else is refused by name rather than fetched.
 
 Fetches every configured feed and reports counts, timings and the first item of each. It reads and
 checks the settings file first, so a mistake in an edit shows up here — named — rather than as a
@@ -247,8 +249,10 @@ appear immediately, where global ones take up to an hour:
 MERCHANT_TOKEN=… MERCHANT_DEV_GUILD=… dotnet run --project src/Merchant
 ```
 
-CI runs exactly those commands, plus `shellcheck deploy/install.sh`, `docker build`, and the test
-suite a second time under a comma-decimal locale — so a green local run is a green build.
+CI runs `build`, `test` and `format`, plus a line-length check, `shellcheck deploy/install.sh`,
+`docker build`, and the test suite a second time under a comma-decimal locale — so a green local run
+is a green build. `--check` is the one command it does not run: it is the only one that reaches the
+network, and a feed having a quiet afternoon is not a broken commit.
 
 That last one is not ceremony. Merchant runs with globalization on, posts USD prices, and parses
 English feed dates, so anything formatted or parsed against the host's culture is a bug that only
@@ -301,7 +305,7 @@ channels already subscribed to it.
 
 | Key    | Required | Value                                     |
 | ------ | -------- | ----------------------------------------- |
-| `urls` | yes      | Array of one or more full http(s) addresses. RSS 1.0, RSS 2.0 and Atom all work without being told which. A URL may contain `{region}` or `{currency}`, filled in per server from `/merchant region`. |
+| `urls` | yes      | Array of one or more full http(s) addresses. RSS 1.0, RSS 2.0 and Atom all work without being told which. A URL may contain `{region}`, filled in per server from `/merchant region`. `{currency}` is filled in the same way and no feed needs it — neither source prices in anything but USD, so it is there for a source that one day does. |
 
 `"source": { "type": "cheapshark", … }` — a slice of CheapShark's deals API. Structured prices, so
 these embeds can strike through a list price. Always quoted in USD, whatever the region is set to.

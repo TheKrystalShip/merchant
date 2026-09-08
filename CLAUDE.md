@@ -76,6 +76,13 @@ caught at startup instead of silently reordering a feed.
 sorts with `ConfigurationKeyComparer`, so the file's own order cannot be relied on. The menus order
 by label instead, which is decided in one place — `FeedCatalog`'s constructor.
 
+**A feed's name is taken exactly as the file writes it.** It is not trimmed on the way in, because
+`"free-games "` and `"free-games"` would then be one feed with the second quietly replacing the
+first — no error, a summary reading "Loaded 1 of 2", and which of them survives decided by the order
+configuration hands its children back rather than by the file. The name pattern refuses the stray
+space instead, and the rejection quotes the name so the space is visible. Lookups still trim, because
+that side is what Discord sends rather than what the file says.
+
 **One malformed feed is dropped, not fatal.** The person editing that file is usually not the person
 who wrote merchant. A resident bot dying at 3am over one typo is a worse failure than four working
 feeds and a loud line at startup, so every rejection names its feed and what was expected. A catalog
@@ -133,6 +140,20 @@ pins dates and prices across several locales, and CI runs the whole suite a seco
 `de_DE.UTF-8`. The analyzers help but do not cover this: CA1305 catches a bare `ToString()` and
 does not see inside an interpolated string, which is exactly where the prices were.
 
+**Everything a person types that reaches a URL is checked where it is typed.** A region is
+substituted into a feed's address, so two arbitrary characters build a request for the wrong page or
+for nothing, and the channel goes quiet with no error anywhere: the fetch failure is swallowed by
+design, one feed down costing only itself. `GuildSettings.IsRegion` and `IsCurrency` are what stop
+it, on `/merchant region` and on `--check`'s argument both — the same code refusing it in both
+places, because those are the only two ways a code gets in.
+
+**`{currency}` is filled in and nothing uses it.** `/merchant region` takes a currency, the ledger
+stores it, and `Template` substitutes it, but neither driver prices in anything but USD — which is
+what `UsdCaveat` exists to say out loud. It stays because it is what a source that quotes a server's
+own money would need, and because it is genuinely part of the `Fetch` key: two servers whose URLs
+differ only by currency are two requests. Do not treat a feed built on it as a supported thing until
+a driver can honour it.
+
 **A source hands out absolute http(s) links and nothing else.** Discord validates a URL while the
 embed is being *built*, so a junk link throws inside the sweep: the item is never marked sent, the
 next sweep picks it up again, and that channel is stuck for good. Feeds do produce these — relative
@@ -145,6 +166,11 @@ feed is allowed. `Announcer.Catalog` fits what it can and says what it left out,
 shortens `/merchant help` instead of taking it offline; `/merchant list` and every refusal are
 truncated for the same reason.
 
+The line saying what was left out is part of that budget, not an afterthought to it. It is written
+by `Announcer.Note`, measured before the first field goes in and set after the last one, because a
+budget that fills the embed to exactly 6000 and *then* appends a footer has spent the whole margin
+it was protecting — and the throw lands on the one command whose entire job is to still answer.
+
 **One fetch per feed per storefront, per sweep.** Subscriptions multiply with servers and channels;
 upstreams do not care why merchant is asking the same question three times, and Reddit answers 429
 to far less than that. `Sweeper` caches a sweep's fetches by feed and region — two servers on
@@ -154,6 +180,23 @@ different regions genuinely are two requests, everything else is one.
 posts on its own clock, reading the backlog the sweep filed. This is the only reason a weekly
 channel is possible — an RSS bot that posts on discovery can only ever be live. Do not collapse
 these back together.
+
+They are separate on the failing path too: a sweep that fetches nothing files nothing and still
+posts. A daily channel whose window opens on the half hour its upstream happens to be down is owed
+the backlog the *last* sweep filed, and holding it behind an outage it has nothing to do with is the
+one thing this split exists to make impossible.
+
+**The backlog comes back most recently found first, and within one sweep in the order the source
+offered.** Two orderings, and both are load-bearing: `Pending` is what a digest lists and what a
+capped live burst picks from, so what a channel is short of room for has to be the least worth
+saying. It works because `Record` stamps `first_seen` once per sweep rather than once per row —
+a per-row timestamp is unique, the `rowid` tiebreaker never runs, and the sweep's own order is lost.
+`Sweeper` reverses the burst before posting, so the channel still reads forwards.
+
+**Only what reached the channel is marked as sent.** A burst is several messages and one of them can
+be refused while the ones before it are already up, so `FlushAsync` collects the ids it actually
+delivered and stamps those in a `finally`. Marking the whole page after the loop posts the delivered
+ones a second time on the next sweep; marking nothing on a failure does the same thing.
 
 **Cadence windows are shaved below their nominal period** (23h, 6.9d). A sweep landing a few
 minutes late must not walk the daily post around the clock, and a weekly post must not drift past
@@ -224,14 +267,21 @@ dotnet run --project src/Merchant -- --check ES   # …for another region
 ```
 
 Nothing else is needed and nothing is bespoke: the repository is an ordinary .NET solution, and CI
-runs those same commands plus `shellcheck`, `docker build`, and the tests again under a
-comma-decimal locale.
+runs `build`, `test` and `format` plus a line-length check, `shellcheck`, `docker build`, and the
+tests again under a comma-decimal locale. `--check` is the one it leaves out, because it is the only
+one that reaches the network and a feed having a quiet afternoon is not a broken commit.
 
 **The style and the lint rules are the build's job, not review's.** `.editorconfig` holds both —
 explicit types over `var`, file-scoped namespaces, `_camelCase` instance fields, PascalCase for
-anything static and readonly — and `Directory.Build.props` turns on `EnforceCodeStyleInBuild` and
-the .NET analyzers at `latest-Recommended`, on top of `TreatWarningsAsErrors`. A violation is a
-failed build, on the machine that made it.
+anything static and readonly, constructors written out rather than primary — and
+`Directory.Build.props` turns on `EnforceCodeStyleInBuild` and the .NET analyzers at
+`latest-Recommended`, on top of `TreatWarningsAsErrors`. A violation is a failed build, on the
+machine that made it.
+
+Two of those rules an analyzer cannot report, and each says so where it is written. Roslyn has no
+line-length rule and the formatter does not wrap, so `max_line_length` is checked by a step in CI
+that reads the same 110 from nowhere but its own line — keep the two in step. And nothing flags a
+primary constructor that is already written, so that one is honoured by hand.
 
 Everything the analyzers report is fixed rather than muted, with three exceptions, each switched
 off beside its reason in `.editorconfig`: CA1848 and CA1873 want `LoggerMessage` delegates for
@@ -253,6 +303,16 @@ strings, which is exactly where the prices were; the locale run is what covers t
 
 `--check` reads and validates the same settings file the bot does, so it is also how an edit gets
 checked. Point `MERCHANT_CONFIG` at a scratch file to try a catalog without touching the real one.
+It is the only argument merchant takes, and anything else that reads like a command is named and
+refused rather than passed to the host as configuration, ignored, and answered by a demand for a
+token nobody was trying to use.
+
+Reading that file fails in two ways and both are sentences. A file the process cannot open throws
+`UnauthorizedAccessException`, which is not an `IOException` and has to be caught by name — a
+root-owned file in a mounted volume is the ordinary way to meet it. A file that will not parse
+throws from the configuration provider, whose own message names the file and nothing else: the line
+and the column are on the exception underneath, and both are printed, because somebody is looking at
+that file in an editor.
 
 It is the first thing to reach for when a channel goes quiet: it separates "the feed changed" from
 "Discord is unhappy" without a token and without touching a server.
@@ -339,6 +399,12 @@ neither, which matters because it republishes over the whole install directory �
 to live outside it. The unit runs with `ProtectHome=read-only`, so the service can read that file but
 not seed it; the container can, and points `MERCHANT_CONFIG` at its volume. The `Dockerfile` is the
 portable half — same code, token passed at run time, ledger on a volume at `/data`.
+
+In that file the account and the `chown` of `/data` come **before** `VOLUME /data`, and the order is
+the whole thing: a build step that touches a path already declared as a volume is discarded by the
+classic builder, which leaves `/data` owned by root while merchant runs unprivileged and cannot open
+its own ledger. BuildKit keeps the `chown`, so the wrong order builds and passes CI and fails only on
+somebody else's engine — which is the machine this image exists for.
 
 The publish names no runtime identifier. A framework-dependent publish runs on whatever architecture
 the host is, and the friend running this may be on an arm64 box; the SDK floor that does matter is in

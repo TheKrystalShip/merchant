@@ -69,11 +69,19 @@ public class CheapSharkSourceTests
     }
 
     /// <summary>Answers every request with the same canned body.</summary>
-    private sealed class CannedHandler(string body, HttpStatusCode status = HttpStatusCode.OK)
-        : HttpMessageHandler
+    private sealed class CannedHandler : HttpMessageHandler
     {
+        private readonly string _body;
+        private readonly HttpStatusCode _status;
+
+        public CannedHandler(string body, HttpStatusCode status = HttpStatusCode.OK)
+        {
+            _body = body;
+            _status = status;
+        }
+
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken) =>
-            Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body) });
+            Task.FromResult(new HttpResponseMessage(_status) { Content = new StringContent(_body) });
     }
 }

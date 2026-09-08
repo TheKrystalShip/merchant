@@ -229,6 +229,36 @@ public class FeedCatalogTests
         Assert.Contains("hyphens", complaint, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void A_feed_name_with_a_stray_space_does_not_quietly_replace_another()
+    {
+        // Trimmed on the way in, these are one feed and the second silently wins: no error, a
+        // summary reading "Loaded 1 of 2", and which survives decided by the order configuration
+        // hands its children back. Refused, the mistake is named and the good one still loads.
+        FeedCatalog catalog = Settings.From("""
+            {
+              "feeds": {
+                "free-games ": {
+                  "label": "Stray", "description": "Has a trailing space in its name.",
+                  "source": { "type": "rss", "urls": [ "https://e.test/a" ] }
+                },
+                "free-games": {
+                  "label": "Real", "description": "Named properly.",
+                  "source": { "type": "rss", "urls": [ "https://e.test/b" ] }
+                }
+              }
+            }
+            """, out CatalogReport report);
+
+        string complaint = Assert.Single(report.Errors);
+        Assert.StartsWith("feed 'free-games ':", complaint, StringComparison.Ordinal);
+        Assert.Contains("hyphens", complaint, StringComparison.Ordinal);
+
+        Assert.Equal(1, report.Loaded);
+        Assert.Equal(2, report.Configured);
+        Assert.Equal("Real", Assert.Single(catalog.All).Label);
+    }
+
     /// <summary>
     /// A key that is not in the schema is the worst mistake this file can hold: ignored in silence,
     /// with the default left in its place looking deliberate. "color" is the one to expect.

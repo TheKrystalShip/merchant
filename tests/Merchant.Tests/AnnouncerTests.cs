@@ -54,6 +54,33 @@ public class AnnouncerTests
         }
     }
 
+    [Fact]
+    public void No_catalog_shape_can_make_the_help_embed_refuse_to_build()
+    {
+        // The budget has to hold for every length a settings file might name, not for the handful
+        // above. The line that says what was left out is appended after the fields, so a budget
+        // that does not reserve room for it fills the embed to exactly 6000 and then overflows —
+        // and Discord refuses an over-long embed while it is being built, which takes the command
+        // down altogether instead of shortening it.
+        for (int description = 20; description <= Schema.Limits.DescriptionText; description++)
+        {
+            EmbedBuilder shell = new EmbedBuilder()
+                .WithTitle("What're ya buyin'?")
+                .WithDescription("Pick a feed, pick a channel, done.")
+                .WithFooter("/merchant add · /merchant list · /merchant remove · /merchant preview");
+
+            List<Category> feeds = [.. Enumerable.Range(0, 40).Select(n => new Category(
+                $"feed-{n}", new string('L', 40), new string('d', description),
+                $"channel-{n}", Cadence.Daily, 0x2A7150u))];
+
+            Embed embed = Announcer.Catalog(shell, feeds);
+
+            Assert.True(
+                embed.Length <= EmbedBuilder.MaxEmbedLength,
+                $"a description of {description} characters built an embed of {embed.Length}");
+        }
+    }
+
     [Theory]
     [InlineData(Fixtures.SteamWeekly)]
     [InlineData(Fixtures.ItadGiveaways)]

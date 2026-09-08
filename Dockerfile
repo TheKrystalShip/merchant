@@ -28,10 +28,16 @@ ENV MERCHANT_DB=/data/merchant.db
 # example here, so an empty volume still produces a working bot and leaves behind the file to edit.
 ENV MERCHANT_CONFIG=/data/appsettings.json
 
-VOLUME /data
-
-# No token baked in, ever. Pass it at run time: docker run -e MERCHANT_TOKEN=... 
+# The account and the directory it owns come before VOLUME, and have to: a build step that changes
+# a path already declared as a volume is discarded by the classic builder, so declaring it first
+# leaves /data owned by root, and merchant — running unprivileged — cannot open its own ledger or
+# seed its own settings file. The image builds either way, which is what makes the order the only
+# thing standing between this and a container that starts and immediately gives up.
 RUN useradd --system --uid 10001 merchant && mkdir -p /data && chown merchant /data
+
+VOLUME /data
 USER merchant
+
+# No token baked in, ever. Pass it at run time: docker run -e MERCHANT_TOKEN=...
 
 ENTRYPOINT ["dotnet", "/app/merchant.dll"]

@@ -33,8 +33,9 @@
 //   "source": { "type": "rss", … }
 //     "urls"         REQUIRED  array of one or more full http(s) addresses, merged into one feed.
 //                              RSS 1.0, RSS 2.0 and Atom all work without being told which.
-//                              A URL may contain {region} or {currency}; both are filled in per
-//                              server from whatever /merchant region is set to.
+//                              A URL may contain {region}, filled in per server from whatever
+//                              /merchant region is set to. {currency} is filled in the same way
+//                              and no feed needs it: neither source prices in anything but USD.
 //
 //   "source": { "type": "cheapshark", … }       always priced in USD, whatever the region is
 //     "upperPrice"   optional  number above 0   sale-price ceiling           default: no ceiling

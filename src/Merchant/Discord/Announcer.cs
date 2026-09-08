@@ -32,6 +32,13 @@ public static class Announcer
     /// <param name="feeds">The catalog, in menu order.</param>
     public static Embed Catalog(EmbedBuilder shell, IReadOnlyList<Category> feeds)
     {
+        // The line saying what was left out is appended after the loop, so the room it needs comes
+        // out of the budget before the loop rather than being discovered after it. Counted
+        // afterwards, it is what pushes a full embed past 6000 — and the whole point of this method
+        // is that a long catalog shortens /merchant help instead of taking it offline.
+        int reserved = Math.Max(0, Note(shell, feeds.Count).Length - (shell.Footer?.Text?.Length ?? 0));
+        int budget = EmbedBuilder.MaxEmbedLength - reserved;
+
         int shown = 0;
 
         foreach (Category feed in feeds)
@@ -44,7 +51,7 @@ public static class Announcer
 
             // Counted before the field is added: the check has to be able to say no.
             if (shown == EmbedBuilder.MaxFieldCount
-                || shell.Length + name.Length + value.Length > EmbedBuilder.MaxEmbedLength)
+                || shell.Length + name.Length + value.Length > budget)
             {
                 break;
             }
@@ -55,12 +62,18 @@ public static class Announcer
 
         if (shown < feeds.Count)
         {
-            shell.WithFooter($"{shell.Footer?.Text} · and {feeds.Count - shown} more not shown here"
-                .TrimStart(' ', '·'));
+            shell.WithFooter(Note(shell, feeds.Count - shown));
         }
 
         return shell.Build();
     }
+
+    /// <summary>
+    /// The footer a shortened catalog carries. Written once because it is measured before the
+    /// fields are added and set after them, and the two have to agree.
+    /// </summary>
+    private static string Note(EmbedBuilder shell, int hidden) =>
+        $"{shell.Footer?.Text} · and {hidden} more not shown here".TrimStart(' ', '·');
 
     /// <summary>One deal, at full size.</summary>
     public static Embed Item(Category category, FeedItem item)
@@ -176,7 +189,9 @@ public static class Announcer
         return line.ToString();
     }
 
-    /// <summary>Defuses the markdown in a game's own title, which is full of brackets and asterisks.</summary>
+    /// <summary>
+    /// Defuses the markdown in a game's own title, which is full of brackets and asterisks.
+    /// </summary>
     private static string Escape(string text) =>
         text.Replace("[", "\\[").Replace("]", "\\]").Replace("*", "\\*").Replace("_", "\\_");
 

@@ -310,6 +310,12 @@ public sealed class Ledger : IDisposable
             using SqliteTransaction tx = _db.BeginTransaction();
             int added = 0;
 
+            // One stamp for the whole sweep, not one per row. first_seen answers "which sweep found
+            // this", and rowid orders within it; stamping each row separately makes every timestamp
+            // unique, so the rowid tiebreaker in Pending never runs and the sweep's own order is
+            // lost.
+            string found = Iso(DateTimeOffset.UtcNow);
+
             foreach (FeedItem item in items)
             {
                 using SqliteCommand cmd = Command(
@@ -318,7 +324,7 @@ public sealed class Ledger : IDisposable
                     VALUES ($s, $i, $t, $p, $j)
                     ON CONFLICT (subscription_id, item_id) DO NOTHING
                     """,
-                    ("$s", subscriptionId), ("$i", item.Id), ("$t", Iso(DateTimeOffset.UtcNow)),
+                    ("$s", subscriptionId), ("$i", item.Id), ("$t", found),
                     ("$p", alreadyPosted ? 1 : 0), ("$j", JsonSerializer.Serialize(item)));
 
                 cmd.Transaction = tx;
@@ -341,7 +347,13 @@ public sealed class Ledger : IDisposable
     }
 
     /// <summary>
-    /// What is waiting to go out for this subscription, newest first, capped.
+    /// What is waiting to go out for this subscription, most recently found first, capped.
+    ///
+    /// Two orderings in one: the newest sweep before an older one, and within a sweep the order the
+    /// source offered — which every source promises is best or newest first. That is the order a
+    /// digest lists and the order a capped live burst picks from, so what a channel is short of
+    /// room for is always the least worth saying. <see cref="Discord.Sweeper"/> reverses it before
+    /// posting, so the channel itself still reads forwards.
     /// </summary>
     public IReadOnlyList<FeedItem> Pending(long subscriptionId, int limit)
     {
@@ -351,7 +363,7 @@ public sealed class Ledger : IDisposable
                 """
                 SELECT payload FROM seen
                 WHERE subscription_id = $s AND posted = 0
-                ORDER BY first_seen DESC, rowid DESC
+                ORDER BY first_seen DESC, rowid ASC
                 LIMIT $n
                 """,
                 ("$s", subscriptionId), ("$n", limit));

@@ -63,7 +63,8 @@ public static class ConfigRead
     }
 
     /// <summary>An optional flag, defaulting when absent.</summary>
-    public static bool Bool(IConfigurationSection section, string key, bool fallback, ICollection<string> errors)
+    public static bool Bool(
+        IConfigurationSection section, string key, bool fallback, ICollection<string> errors)
     {
         if (Optional(section, key) is not { } raw)
         {
@@ -104,7 +105,8 @@ public static class ConfigRead
     }
 
     /// <summary>An optional embed colour, written the way a person writes one: <c>#1B2838</c>.</summary>
-    public static uint Colour(IConfigurationSection section, string key, uint fallback, ICollection<string> errors)
+    public static uint Colour(
+        IConfigurationSection section, string key, uint fallback, ICollection<string> errors)
     {
         if (Optional(section, key) is not { } raw)
         {

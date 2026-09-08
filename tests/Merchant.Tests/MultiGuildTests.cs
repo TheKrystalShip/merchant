@@ -127,3 +127,51 @@ public class MultiGuildTests : IDisposable
         GC.SuppressFinalize(this);
     }
 }
+
+/// <summary>
+/// A region is substituted into a feed's URL, so anything that is not a country code builds an
+/// address that fetches the wrong page or nothing at all — and a failed fetch costs its own items
+/// in silence by design. Refusing it where it is typed is the only place the mistake is visible.
+/// </summary>
+public class RegionCodeTests
+{
+    [Theory]
+    [InlineData("ES")]
+    [InlineData("gb")]
+    [InlineData(" US ")]
+    public void A_country_code_is_two_letters(string code)
+    {
+        Assert.True(GuildSettings.IsRegion(code));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("E")]
+    [InlineData("ESP")]
+    [InlineData("E5")]
+    // Two characters that end the URL early, or start a query parameter of their own.
+    [InlineData("#x")]
+    [InlineData("&x")]
+    [InlineData("..")]
+    public void Anything_else_is_not(string code)
+    {
+        Assert.False(GuildSettings.IsRegion(code));
+    }
+
+    [Theory]
+    [InlineData("EUR")]
+    [InlineData("gbp")]
+    public void A_currency_code_is_three_letters(string code)
+    {
+        Assert.True(GuildSettings.IsCurrency(code));
+    }
+
+    [Theory]
+    [InlineData("EU")]
+    [InlineData("EUROS")]
+    [InlineData("EU1")]
+    public void A_currency_code_that_is_not_is_refused(string code)
+    {
+        Assert.False(GuildSettings.IsCurrency(code));
+    }
+}

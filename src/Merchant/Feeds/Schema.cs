@@ -38,7 +38,9 @@ public static class Schema
         public static readonly IReadOnlyList<string> All =
             [DatabasePath, SweepMinutes, UserAgent, DevGuildId, Token];
 
-        /// <summary>The ones worth suggesting: <see cref="Token"/> is recognised only to be refused.</summary>
+        /// <summary>
+        /// The ones worth suggesting: <see cref="Token"/> is recognised only to be refused.
+        /// </summary>
         public static readonly IReadOnlyList<string> Offered =
             [DatabasePath, SweepMinutes, UserAgent, DevGuildId];
     }
@@ -59,7 +61,9 @@ public static class Schema
             [Label, Description, Channel, Cadence, Colour, Enabled, Source];
     }
 
-    /// <summary>Keys in a feed's <see cref="FeedKeys.Source"/> block. Which apply depends on its type.</summary>
+    /// <summary>
+    /// Keys in a feed's <see cref="FeedKeys.Source"/> block. Which apply depends on its type.
+    /// </summary>
     public static class SourceKeys
     {
         public const string Type = "type";

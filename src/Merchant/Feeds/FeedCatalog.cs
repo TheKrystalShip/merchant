@@ -53,7 +53,9 @@ public sealed partial class FeedCatalog
             ? blueprint.Build(http, settings)
             : throw new ArgumentException($"Unknown feed '{key}'.", nameof(key));
 
-    /// <summary>Reads the <see cref="Schema.Feeds"/> section, keeping every entry that is well formed.</summary>
+    /// <summary>
+    /// Reads the <see cref="Schema.Feeds"/> section, keeping every entry that is well formed.
+    /// </summary>
     /// <param name="feeds">The <see cref="Schema.Feeds"/> section of the settings file.</param>
     /// <param name="registry">The drivers a feed may name.</param>
     /// <param name="report">What was loaded, what was skipped and why.</param>
@@ -68,7 +70,13 @@ public sealed partial class FeedCatalog
         foreach (IConfigurationSection entry in feeds.GetChildren())
         {
             List<string> problems = [];
-            string key = entry.Key.Trim();
+
+            // Taken as written. Trimming it here would let "free-games " and "free-games" both
+            // resolve to one feed, the second quietly replacing the first with no line to say so —
+            // and which of them survives would be decided by the order configuration hands its
+            // children back rather than by the file. The pattern below refuses the stray space
+            // instead, and names the feed with its whitespace showing inside the quotes.
+            string key = entry.Key;
 
             if (!ConfigRead.Bool(entry, Schema.FeedKeys.Enabled, true, problems) && problems.Count == 0)
             {

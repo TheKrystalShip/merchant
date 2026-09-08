@@ -182,7 +182,9 @@ public sealed partial class RssSource : ISource
         return text.Length <= limit ? text : string.Concat(text.AsSpan(0, limit).TrimEnd(), "…");
     }
 
-    /// <summary>The first image in an entry's HTML body, which is where Steam hides its capsule art.</summary>
+    /// <summary>
+    /// The first image in an entry's HTML body, which is where Steam hides its capsule art.
+    /// </summary>
     private static string? FirstImage(string? html)
     {
         if (string.IsNullOrWhiteSpace(html))
@@ -194,7 +196,9 @@ public sealed partial class RssSource : ISource
         return match.Success ? Links.Http(WebUtility.HtmlDecode(match.Groups[1].Value)) : null;
     }
 
-    /// <summary>Decodes entities and trims. Feeds double-encode often enough to be worth two passes.</summary>
+    /// <summary>
+    /// Decodes entities and trims. Feeds double-encode often enough to be worth two passes.
+    /// </summary>
     private static string? Clean(string? raw) =>
         raw is null ? null : WebUtility.HtmlDecode(WebUtility.HtmlDecode(raw)).Trim();
 

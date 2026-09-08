@@ -78,14 +78,17 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
         (long id, bool created) = _ledger.Subscribe(
             GuildId, channel.Id, category.Key, cadence, ping?.Id);
 
+        string pinging = ping is null ? string.Empty : $", pinging {ping.Mention}";
+        string opening = created ? "The first few will appear within the hour." : string.Empty;
+
         EmbedBuilder embed = new EmbedBuilder()
             .WithColor(new Color(category.Colour))
             .WithTitle(created ? $"{category.Label} → {channel.Name}" : $"{category.Label} updated")
             .WithDescription($"""
                  {category.Description}
 
-                 Posting **{cadence.Describe()}** in {channel.Mention}{(ping is null ? "" : $", pinging {ping.Mention}")}.
-                 {(created ? "The first few will appear within the hour." : "")}
+                 Posting **{cadence.Describe()}** in {channel.Mention}{pinging}.
+                 {opening}
                  """)
             .WithFooter($"Subscription #{id} · remove it with /merchant remove id:{id}");
 
@@ -220,6 +223,18 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
     {
         await DeferAsync(ephemeral: true);
 
+        if (!GuildSettings.IsRegion(country) || !GuildSettings.IsCurrency(currency))
+        {
+            await FollowupAsync(embed: Problem(
+                "That is not a country and a currency",
+                """
+                 Give a two-letter country code and a three-letter currency code — **ES** and
+                 **EUR**, **GB** and **GBP**, **US** and **USD**. Nothing has been changed.
+                 """),
+                ephemeral: true);
+            return;
+        }
+
         GuildSettings settings = new(
             GuildId, country.Trim().ToUpperInvariant(), currency.Trim().ToUpperInvariant());
 
@@ -228,9 +243,9 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
         await FollowupAsync(embed: new EmbedBuilder()
             .WithTitle($"Prices now quoted for {settings.Region}")
             .WithDescription($"""
-                 Giveaways and deals will use the **{settings.Region}** storefront and **{settings.Currency}**.
-                 {UsdCaveat()}
-                 """)
+                Giveaways and deals use the **{settings.Region}** storefront and **{settings.Currency}**.
+                {UsdCaveat()}
+                """)
             .WithColor(new Color(0x2A7150))
             .Build(),
             ephemeral: true);
@@ -248,7 +263,8 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
                 "Pick a feed, pick a channel, done. Everything below is ready to use — " +
                 "there is nothing to configure beyond the channel.")
             .WithColor(new Color(0xC24A12))
-            .WithFooter("/merchant add · /merchant list · /merchant remove · /merchant preview · /merchant region");
+            .WithFooter(
+                "/merchant add · /merchant list · /merchant remove · /merchant preview · /merchant region");
 
         await FollowupAsync(embed: Announcer.Catalog(embed, _catalog.All), ephemeral: true);
     }

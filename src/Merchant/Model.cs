@@ -1,9 +1,13 @@
+using System.Text.RegularExpressions;
+
 namespace Merchant;
 
 /// <summary>How often a channel hears from merchant.</summary>
 public enum Cadence
 {
-    /// <summary>Post items as they are found, capped per sweep so a busy feed cannot flood a channel.</summary>
+    /// <summary>
+    /// Post items as they are found, capped per sweep so a busy feed cannot flood a channel.
+    /// </summary>
     Live = 0,
 
     /// <summary>Hold what the day found and post it as one digest.</summary>
@@ -54,8 +58,25 @@ public sealed record Subscription(
 /// <summary>Per-server preferences. One row per guild, created on first use.</summary>
 /// <param name="Region">Two-letter region used by the sources that price things.</param>
 /// <param name="Currency">ISO currency code, e.g. <c>EUR</c>.</param>
-public sealed record GuildSettings(ulong GuildId, string Region, string Currency)
+public sealed partial record GuildSettings(ulong GuildId, string Region, string Currency)
 {
     /// <summary>What a server gets before anybody runs <c>/merchant region</c>.</summary>
     public static GuildSettings Default(ulong guildId) => new(guildId, "US", "USD");
+
+    /// <summary>
+    /// Whether this is a country code at all. A region is substituted into a feed's URL, so
+    /// anything else builds an address that fetches the wrong page or nothing, and the channel it
+    /// belongs to goes quiet with no error anywhere — the failure is silent unless it is caught
+    /// where the code is typed.
+    /// </summary>
+    public static bool IsRegion(string code) => RegionPattern().IsMatch(code.Trim());
+
+    /// <summary>Whether this is a currency code. Checked for the same reason as the region.</summary>
+    public static bool IsCurrency(string code) => CurrencyPattern().IsMatch(code.Trim());
+
+    [GeneratedRegex("^[A-Za-z]{2}$")]
+    private static partial Regex RegionPattern();
+
+    [GeneratedRegex("^[A-Za-z]{3}$")]
+    private static partial Regex CurrencyPattern();
 }

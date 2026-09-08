@@ -22,7 +22,9 @@ public interface ISourceFactory
     /// <summary>Reads and checks one <c>source</c> block.</summary>
     /// <param name="source">The feed's <c>source</c> section.</param>
     /// <param name="errors">Appended to when something is wrong; the caller prefixes the feed key.</param>
-    /// <returns>A blueprint, or null when the block was rejected and <paramref name="errors"/> says why.</returns>
+    /// <returns>
+    /// A blueprint, or null when the block was rejected and <paramref name="errors"/> says why.
+    /// </returns>
     ISourceBlueprint? Create(IConfigurationSection source, ICollection<string> errors);
 }
 
@@ -33,7 +35,9 @@ public interface ISourceFactory
 /// </summary>
 public interface ISourceBlueprint
 {
-    /// <summary>The driver that built it, for diagnostics and for questions like "which feeds are priced in USD".</summary>
+    /// <summary>
+    /// The driver that built it, for diagnostics and for questions like "which feeds are priced in USD".
+    /// </summary>
     string Type { get; }
 
     /// <summary>Builds the source for one server, filling in its region and currency.</summary>

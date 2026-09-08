@@ -29,9 +29,17 @@ try
 {
     config = MerchantConfig.Load(configPath);
 }
-catch (Exception ex) when (ex is InvalidDataException or IOException or FormatException)
+catch (Exception ex) when (ex is InvalidDataException or IOException
+                              or UnauthorizedAccessException or FormatException)
 {
-    Console.Error.WriteLine($"Could not read {configPath}: {ex.Message}");
+    // The configuration provider wraps the real complaint twice over: the outer message names the
+    // file and nothing else, and the line and column that locate a stray comma are on the reader's
+    // own exception at the bottom of the chain. Somebody is looking at this file in an editor, so
+    // the innermost one is said as well as the first.
+    Exception cause = ex.GetBaseException();
+    string detail = ReferenceEquals(cause, ex) ? ex.Message : $"{ex.Message} {cause.Message}";
+
+    Console.Error.WriteLine($"Could not read {configPath}: {detail}");
     return 1;
 }
 
@@ -62,10 +70,36 @@ if (catalog.All.Count == 0)
 }
 
 // The feed check needs no token and no gateway, so it runs before anything else is configured.
-if (args is [_, ..] && args[0] is "--check" or "check")
+if (args is ["--check", ..])
 {
-    return await Preflight.RunAsync(
-        catalog, options.UserAgent, args.Length > 1 ? args[1] : "US", CancellationToken.None);
+    // The region a feed is checked for. Left out, it is the one a server has before anybody runs
+    // /merchant region, which is the answer most people are asking about.
+    string region = GuildSettings.Default(0).Region;
+
+    if (args is [_, { } asked, ..])
+    {
+        if (!GuildSettings.IsRegion(asked))
+        {
+            Console.Error.WriteLine(
+                $"'{asked}' is not a country code. Give two letters, like ES or GB, or leave it " +
+                $"out to check the feeds as they arrive in {region}.");
+            return 1;
+        }
+
+        region = asked.ToUpperInvariant();
+    }
+
+    return await Preflight.RunAsync(catalog, options.UserAgent, region, CancellationToken.None);
+}
+
+// Anything else that reads like a command is a mistake worth naming: the host would otherwise take
+// it as configuration, ignore it, and go on to demand a token for a run nobody asked for.
+if (args is [{ } first, ..] && !first.StartsWith("--", StringComparison.Ordinal))
+{
+    Console.Error.WriteLine(
+        $"merchant has no command '{first}'. It takes --check [COUNTRY] to read the settings file " +
+        "and fetch every feed, and no argument at all to run the bot.");
+    return 1;
 }
 
 string? token = Environment.GetEnvironmentVariable(BotOptions.TokenVariable);

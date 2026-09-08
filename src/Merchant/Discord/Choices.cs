@@ -26,7 +26,9 @@ public enum CadenceChoice
 /// <summary>Translates the command menus into catalog and domain values.</summary>
 public static class Choices
 {
-    /// <summary>The cadence to store, resolving <see cref="CadenceChoice.Default"/> against the feed.</summary>
+    /// <summary>
+    /// The cadence to store, resolving <see cref="CadenceChoice.Default"/> against the feed.
+    /// </summary>
     public static Cadence Resolve(this CadenceChoice choice, Category category) => choice switch
     {
         CadenceChoice.Default => category.DefaultCadence,
