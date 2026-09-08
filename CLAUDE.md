@@ -58,6 +58,20 @@ ITAD is still right for giveaways, which need no filter and vary by region.
 **CheapShark requires a descriptive `User-Agent`** or it refuses the request outright, and Reddit
 throttles a generic one harder. That is why every fetch goes through the one named `HttpClient`.
 
+**`InvariantGlobalization` must stay false.** Discord.Net constructs a `CultureInfo` from every
+guild's `preferred_locale` while handling GUILD_CREATE. With the flag on, the bot connects,
+registers commands and reports itself healthy — then throws `CultureNotFoundException` on the
+first guild, which never enters the client's cache, and every command afterwards fails on a null
+`Context.Guild`. It presents as "Unknown Guild" in the log and a `NullReferenceException` in the
+command, which points nowhere near the cause. `GlobalizationTests` is the guard; it fails under
+`-p:InvariantGlobalization=true`. The rest of the workspace sets this true — magpie is AOT and
+touches no locales — so it is an easy flag to inherit by accident.
+
+**Commands read the guild id from the interaction payload, not the gateway cache.** `Context.Guild`
+is null whenever a guild is missing from the cache; `Context.Interaction.GuildId` is always
+present. A permission check that cannot run returns null rather than an empty list, so "could not
+check" is never mistaken for "nothing is missing".
+
 **No privileged intents.** `GatewayIntents.Guilds` only. merchant reads no messages and no member
 lists, so the application never needs intent review. Do not add an intent for a convenience.
 

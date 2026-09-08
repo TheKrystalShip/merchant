@@ -68,7 +68,7 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
 
         Cadence cadence = howOften.Resolve(category);
         (long id, bool created) = _store.Subscribe(
-            Context.Guild.Id, channel.Id, key, cadence, ping?.Id);
+            GuildId, channel.Id, key, cadence, ping?.Id);
 
         EmbedBuilder embed = new EmbedBuilder()
             .WithColor(new Color(category.Colour))
@@ -90,7 +90,7 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
     {
         await DeferAsync(ephemeral: true);
 
-        IReadOnlyList<Subscription> subscriptions = _store.ForGuild(Context.Guild.Id);
+        IReadOnlyList<Subscription> subscriptions = _store.ForGuild(GuildId);
 
         if (subscriptions.Count == 0)
         {
@@ -126,7 +126,7 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
             body.AppendLine();
         }
 
-        GuildSettings settings = _store.Settings(Context.Guild.Id);
+        GuildSettings settings = _store.Settings(GuildId);
 
         await FollowupAsync(embed: new EmbedBuilder()
             .WithTitle("What merchant is announcing")
@@ -144,7 +144,7 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
     {
         await DeferAsync(ephemeral: true);
 
-        bool removed = _store.Unsubscribe(Context.Guild.Id, id);
+        bool removed = _store.Unsubscribe(GuildId, id);
 
         await FollowupAsync(embed: removed
             ? new EmbedBuilder()
@@ -166,7 +166,7 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
 
         string key = feed.ToKey();
         Category category = Catalog.Find(key)!;
-        GuildSettings settings = _store.Settings(Context.Guild.Id);
+        GuildSettings settings = _store.Settings(GuildId);
 
         ISource source = Catalog.SourceFor(
             key, _http.CreateClient(BotOptions.HttpClientName), settings);
@@ -199,7 +199,7 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
         await DeferAsync(ephemeral: true);
 
         GuildSettings settings = new(
-            Context.Guild.Id, country.Trim().ToUpperInvariant(), currency.Trim().ToUpperInvariant());
+            GuildId, country.Trim().ToUpperInvariant(), currency.Trim().ToUpperInvariant());
 
         _store.SaveSettings(settings);
 
@@ -242,14 +242,25 @@ public sealed class MerchantModule : InteractionModuleBase<SocketInteractionCont
     }
 
     /// <summary>
-    /// The permissions merchant lacks in a channel, in the order a person would turn them on.
-    /// Empty means it can post there.
+    /// The server this command came from, read from the interaction payload rather than the
+    /// gateway cache. The two agree in normal operation, but a guild the gateway failed to cache
+    /// must still be addressable — otherwise one bad dispatch takes every command down with it.
     /// </summary>
-    private IReadOnlyList<string> Missing(ITextChannel channel)
+    private ulong GuildId => Context.Interaction.GuildId ?? Context.Guild.Id;
+
+    /// <summary>
+    /// The permissions merchant lacks in a channel, in the order a person would turn them on.
+    /// </summary>
+    /// <returns>
+    /// Empty when merchant can post there, and <c>null</c> when the check could not run at all
+    /// because the guild is absent from the gateway cache. Those are different answers: treating
+    /// "could not check" as "nothing is missing" would report a problem that does not exist.
+    /// </returns>
+    private IReadOnlyList<string>? Missing(ITextChannel channel)
     {
-        if (Context.Guild.CurrentUser is not SocketGuildUser self)
+        if (Context.Guild?.CurrentUser is not SocketGuildUser self)
         {
-            return [];
+            return null;
         }
 
         ChannelPermissions permissions = self.GetPermissions(channel);

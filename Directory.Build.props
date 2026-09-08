@@ -5,6 +5,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Must stay false. Discord.Net builds a CultureInfo from each guild's preferred_locale
+         while handling GUILD_CREATE; under invariant globalization that throws, the guild never
+         enters the client's cache, and every command then fails on a null Context.Guild. -->
+    <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
 </Project>

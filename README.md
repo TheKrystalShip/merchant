@@ -1,13 +1,13 @@
-# merchant
+# Merchant
 
-> *"What're ya buyin'?"*
+> _"What're ya buyin'?"_
 
 Game-deal announcements for Discord. Invite it, point it at a channel, and it posts.
 
 Named for the one in Resident Evil 4, on the grounds that a bot which turns up unannounced to
 offer you things cheap should be honest about what it is.
 
-merchant exists because the alternative is five services: an RSS bot for one feed, a deals bot for
+`Merchant` exists because the alternative is five services: an RSS bot for one feed, a deals bot for
 another, a no-code automation for the third, and a wiki page of feed URLs to keep them straight.
 Here there is one bot, five feeds it already knows about, and one command.
 
@@ -19,29 +19,29 @@ That is the entire setup.
 
 ## What it posts
 
-| Feed | Where it comes from | Default cadence |
-|---|---|---|
-| **Top Games of the Week** | Steam's own weekly top-sellers chart | once a week |
-| **Games Under $10** | CheapShark, price-capped, best deals first | once a day |
-| **Best Game Deals** | CheapShark, 75+ Metacritic, largest discounts | once a day |
-| **Worth Checking Out** | Rock Paper Shotgun, PC Gamer, top of r/GameDeals | once a day |
-| **Free Games & Giveaways** | IsThereAnyDeal giveaways | as they appear |
+| Feed                       | Where it comes from                              | Default cadence |
+| -------------------------- | ------------------------------------------------ | --------------- |
+| **Top Games of the Week**  | Steam's own weekly top-sellers chart             | once a week     |
+| **Games Under $10**        | CheapShark, price-capped, best deals first       | once a day      |
+| **Best Game Deals**        | CheapShark, 75+ Metacritic, largest discounts    | once a day      |
+| **Worth Checking Out**     | Rock Paper Shotgun, PC Gamer, top of r/GameDeals | once a day      |
+| **Free Games & Giveaways** | IsThereAnyDeal giveaways                         | as they appear  |
 
 Each posts in its own colour, so channels read apart at a glance.
 
 ## Commands
 
 Everything is under `/merchant`, and every reply is ephemeral — setup does not clutter the channel.
-The commands default to **Manage Server**; change that in *Server Settings → Integrations*.
+The commands default to **Manage Server**; change that in _Server Settings → Integrations_.
 
-| Command | What it does |
-|---|---|
-| `/merchant add` | Point a feed at a channel. Optionally set a cadence and a role to ping. |
-| `/merchant list` | What is posting where, and how much is waiting. |
-| `/merchant remove` | Stop one feed, by the number `/merchant list` shows. |
-| `/merchant preview` | See what a feed would post, before wiring it up. Only you see it. |
-| `/merchant region` | Set the country and currency used for prices. |
-| `/merchant help` | The catalog, with a suggested channel name for each feed. |
+| Command             | What it does                                                            |
+| ------------------- | ----------------------------------------------------------------------- |
+| `/merchant add`     | Point a feed at a channel. Optionally set a cadence and a role to ping. |
+| `/merchant list`    | What is posting where, and how much is waiting.                         |
+| `/merchant remove`  | Stop one feed, by the number `/merchant list` shows.                    |
+| `/merchant preview` | See what a feed would post, before wiring it up. Only you see it.       |
+| `/merchant region`  | Set the country and currency used for prices.                           |
+| `/merchant help`    | The catalog, with a suggested channel name for each feed.               |
 
 `/merchant add` checks that merchant can actually post in the target channel **before** it saves
 anything, and names the missing permission if it cannot. A feed bot that silently fails on a
@@ -60,7 +60,7 @@ as already seen, so a new channel proves it works without a month of history lan
 ## Running it
 
 Needs a Discord application: <https://discord.com/developers/applications> → **New Application** →
-**Bot** → **Reset Token**. merchant requests no privileged intents, so nothing there needs enabling.
+**Bot** → **Reset Token**. Merchant requests no privileged intents, so nothing there needs enabling.
 
 Invite it with this URL, substituting the application id — the permissions integer is
 View Channels + Send Messages + Embed Links, and nothing else:
@@ -92,13 +92,13 @@ docker run -d --name merchant \
 
 All of it is environment variables; there is no settings file.
 
-| Variable | Default | Meaning |
-|---|---|---|
-| `MERCHANT_TOKEN` | — | **Required.** The bot token. |
-| `MERCHANT_DB` | `merchant.db` | Where the ledger lives. |
-| `MERCHANT_SWEEP_MINUTES` | `30` | How often feeds are fetched. Clamped to 5–720. |
-| `MERCHANT_USER_AGENT` | `merchant/1.0 …` | Sent on every fetch. CheapShark rejects a generic one. |
-| `MERCHANT_DEV_GUILD` | unset | Register commands to one server, which is instant. Global takes an hour. |
+| Variable                 | Default          | Meaning                                                                  |
+| ------------------------ | ---------------- | ------------------------------------------------------------------------ |
+| `MERCHANT_TOKEN`         | —                | **Required.** The bot token.                                             |
+| `MERCHANT_DB`            | `merchant.db`    | Where the ledger lives.                                                  |
+| `MERCHANT_SWEEP_MINUTES` | `30`             | How often feeds are fetched. Clamped to 5–720.                           |
+| `MERCHANT_USER_AGENT`    | `merchant/1.0 …` | Sent on every fetch. CheapShark rejects a generic one.                   |
+| `MERCHANT_DEV_GUILD`     | unset            | Register commands to one server, which is instant. Global takes an hour. |
 
 ## Checking the feeds
 
