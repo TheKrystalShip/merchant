@@ -18,6 +18,12 @@ public static class MerchantConfig
     /// </summary>
     public const string PathVariable = "MERCHANT_CONFIG";
 
+    /// <summary>
+    /// Overrides where the ledger is kept, ahead of the settings file. The unit and the container
+    /// both set it, which is why anything reporting the path has to read it.
+    /// </summary>
+    public const string DatabaseVariable = "MERCHANT_DB";
+
     /// <summary>The settings file, under a directory of merchant's own.</summary>
     private const string FileName = "appsettings.json";
 
@@ -33,11 +39,14 @@ public static class MerchantConfig
     /// </summary>
     private static readonly (string Variable, string Setting)[] Overrides =
     [
-        ("MERCHANT_DB", $"{Schema.Bot}:{Schema.BotKeys.DatabasePath}"),
+        (DatabaseVariable, $"{Schema.Bot}:{Schema.BotKeys.DatabasePath}"),
         ("MERCHANT_SWEEP_MINUTES", $"{Schema.Bot}:{Schema.BotKeys.SweepMinutes}"),
         ("MERCHANT_USER_AGENT", $"{Schema.Bot}:{Schema.BotKeys.UserAgent}"),
         ("MERCHANT_DEV_GUILD", $"{Schema.Bot}:{Schema.BotKeys.DevGuildId}"),
     ];
+
+    /// <summary>The names of those variables, for the help text that has to list them.</summary>
+    public static IEnumerable<string> OverrideVariables => Overrides.Select(o => o.Variable);
 
     /// <summary>
     /// Where the settings file lives: <c>$MERCHANT_CONFIG</c>, else the XDG config directory.
@@ -53,8 +62,9 @@ public static class MerchantConfig
     }
 
     /// <summary>
-    /// Where the ledger lives when the settings file names no path of its own: the XDG state
-    /// directory, which is where a long-lived file a person never edits belongs.
+    /// Where the ledger lives when the settings file names no path of its own:
+    /// <c>$MERCHANT_DB</c>, else the XDG state directory, which is where a long-lived file a
+    /// person never edits belongs.
     ///
     /// Absolute, deliberately. A relative default resolves against the working directory, so the
     /// same install writes a different database depending on where it was started from — one
@@ -62,8 +72,10 @@ public static class MerchantConfig
     /// has apparently forgotten every subscription.
     /// </summary>
     public static string ResolveDatabasePath() =>
-        Path.Combine(BaseDirectory("XDG_STATE_HOME", Path.Combine(".local", "state")),
-            DirectoryName, Schema.Defaults.DatabaseFileName);
+        Environment.GetEnvironmentVariable(DatabaseVariable) is { Length: > 0 } explicitPath
+            ? Path.GetFullPath(explicitPath)
+            : Path.Combine(BaseDirectory("XDG_STATE_HOME", Path.Combine(".local", "state")),
+                DirectoryName, Schema.Defaults.DatabaseFileName);
 
     /// <summary>One of the XDG base directories, falling back to its default place under home.</summary>
     private static string BaseDirectory(string variable, string fallback) =>

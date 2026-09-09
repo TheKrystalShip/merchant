@@ -19,7 +19,7 @@ It takes **comments and trailing commas**, and the copy merchant seeds is annota
 {
   "bot": {
     "sweepMinutes": 30,              // how often every feed is fetched, 5–720
-    "userAgent": "merchant/1.0 (…)"  // CheapShark rejects a generic one
+    "userAgent": "merchant/<version> (…)"  // the default; CheapShark rejects a generic one
     // "databasePath": "…"           // default: ~/.local/state/merchant/merchant.db
     // "devGuildId": 123…            // register commands to one server; instant, vs an hour
   },
@@ -35,7 +35,7 @@ Every key optional.
 | Key            | Value           | Default                                | Meaning                                   |
 | -------------- | --------------- | -------------------------------------- | ----------------------------------------- |
 | `sweepMinutes` | number, 5–720   | `30`                                   | How often every feed is fetched.          |
-| `userAgent`    | string          | `merchant/1.0 (…)`                     | Sent on every request.                    |
+| `userAgent`    | string          | `merchant/<version> (…)`               | Sent on every request.                    |
 | `databasePath` | string          | `~/.local/state/merchant/merchant.db`  | Where the ledger lives.                   |
 | `devGuildId`   | number          | register globally                      | Register commands to one server instead.  |
 

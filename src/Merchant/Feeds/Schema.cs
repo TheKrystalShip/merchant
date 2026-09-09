@@ -102,8 +102,14 @@ public static class Schema
 
         public const int SweepMinutes = 30;
 
-        public const string UserAgent =
-            "merchant/1.0 (Discord game-deal announcer; +https://github.com/TheKrystalShip/merchant)";
+        /// <summary>
+        /// Carries the version, so a feed host reading its logs can tell one build from another and
+        /// the claim stays true across a release. CheapShark refuses a request without a
+        /// descriptive agent and Reddit throttles one harder, so this is not decoration.
+        /// </summary>
+        public static readonly string UserAgent =
+            $"merchant/{Build.Version} (Discord game-deal announcer; " +
+            "+https://github.com/TheKrystalShip/merchant)";
 
         /// <summary>Discord's own blurple, for a feed that names no colour of its own.</summary>
         public const uint Colour = 0x5865F2;

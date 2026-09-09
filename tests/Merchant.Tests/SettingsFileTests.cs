@@ -81,6 +81,9 @@ public class SettingsFileTests
         Assert.Equal(MerchantConfig.ResolveDatabasePath(), options.DatabasePath);
         Assert.Equal(TimeSpan.FromMinutes(30), options.SweepInterval);
         Assert.Contains("merchant", options.UserAgent, StringComparison.Ordinal);
+
+        // The version reaches the wire, so a feed host's logs can tell one build from another.
+        Assert.Contains(Build.Version, options.UserAgent, StringComparison.Ordinal);
         Assert.Null(options.DevGuildId);
     }
 
