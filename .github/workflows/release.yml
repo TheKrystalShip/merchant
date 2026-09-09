@@ -209,9 +209,12 @@ jobs:
           sha256sum merchant-* > SHA256SUMS
           cat SHA256SUMS
 
+      # GH_REPO because this job holds the archives and nothing else: there is no checkout here for
+      # gh to read the repository out of, and it has no other reason to want one.
       - name: Publish the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           gh release create "${GITHUB_REF_NAME}" \
             --title "merchant ${GITHUB_REF_NAME}" \
