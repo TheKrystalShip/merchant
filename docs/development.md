@@ -94,7 +94,7 @@ live feeds when a source changes shape.
 the catalog merchant ships — the five feeds, their labels, channels, cadences, colours and source
 types — so the shipped example cannot drift from what the bot is meant to post. The rest of it
 asserts that every rejection names its feed and what was expected, because that message is the
-entire interface for somebody with a text editor and no access to this repository.
+entire interface for somebody with a text editor and nothing else.
 
 **`LedgerMigrationTests` is the only suite that starts from a database that already exists**, which
 is the only interesting case: every other one opens an empty file, and an empty file cannot be
@@ -125,8 +125,8 @@ feed having a quiet afternoon is not a broken commit.
 
 The locale run is not ceremony. Merchant runs with globalization on, posts USD prices and parses
 English feed dates, so anything formatted or parsed against the host's culture is a bug that only
-appears on somebody else's machine: an embed reading `$3,49`, a review count as `7.716`, or a feed
-whose dates the parser refuses.
+appears on a machine set to another language: an embed reading `$3,49`, a review count as `7.716`,
+or a feed whose dates the parser refuses.
 
 ## Running against a real server
 
@@ -183,7 +183,7 @@ private static readonly string[] Migrations =
 ];
 ```
 
-Three rules, all of them about databases that are not yours:
+Three rules, all of them about databases that already exist and hold somebody's subscriptions:
 
 - **Never edit or renumber an entry that has shipped.** Every database already carries its effects
   and will never run it again, so an edit only changes what a *fresh* install gets — which is how

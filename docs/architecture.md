@@ -4,14 +4,14 @@ What the pieces are, and which parts of the arrangement are load-bearing. This i
 read before changing the sweep, the ledger or the catalog; `CLAUDE.md` at the repository root
 carries the same reasoning in the form an agent working in the tree reads first.
 
-Merchant depends on nothing of TheKrystalShip's. Discord.Net and Microsoft.Data.Sqlite are the whole
-package surface, and `nuget.config` names only nuget.org, so the repository builds on a machine that
-has never held a GitHub Packages token.
+Discord.Net and Microsoft.Data.Sqlite are the whole package surface, and `nuget.config` names only
+nuget.org, so the repository builds on any machine with the SDK on it.
 
 ## The constraint everything follows from
 
-It was written for somebody else's Discord server: **the person setting it up is not the person who
-wrote it, and will not read the source.** Every decision below is downstream of that.
+**Whoever sets merchant up does not read the source.** The settings file, the startup log and the
+command replies are the entire interface, and each has to explain itself to somebody who has never
+seen this repository. Every decision below is downstream of that.
 
 ## The shape
 
@@ -182,8 +182,8 @@ guild's `preferred_locale` while handling GUILD_CREATE. With the flag on, the bo
 registers commands and reports itself healthy — then throws `CultureNotFoundException` on the first
 guild, which never enters the client's cache, and every command afterwards fails on a null
 `Context.Guild`. It presents as "Unknown Guild" in the log and a `NullReferenceException` in the
-command, which points nowhere near the cause. `GlobalizationTests` is the guard. The rest of the
-workspace sets this true, so it is an easy flag to inherit by accident.
+command, which points nowhere near the cause. `GlobalizationTests` is the guard, and it fails under
+`-p:InvariantGlobalization=true` rather than letting the flag arrive unnoticed.
 
 **Every number and date crossing merchant's edge is invariant, never the host's culture.** That is
 the other half, and it cuts both ways. Reading: a feed writes English month names on a Gregorian
@@ -226,10 +226,10 @@ is null whenever a guild is missing from the cache; `Context.Interaction.GuildId
 A permission check that cannot run returns null rather than an empty list, so "could not check" is
 never mistaken for "nothing is missing".
 
-**Embeds are packed to Discord's budget, because the size of the catalog is a stranger's decision.**
-An embed refuses to build past 6000 characters total, which is around thirteen feeds at the length a
-feed is allowed. `Announcer.Catalog` fits what it can and says what it left out, so a long catalog
-shortens `/merchant help` instead of taking it offline.
+**Embeds are packed to Discord's budget, because the size of the catalog is decided by whoever edits
+the file.** An embed refuses to build past 6000 characters total, which is around thirteen feeds at
+the length a feed is allowed. `Announcer.Catalog` fits what it can and says what it left out, so a
+long catalog shortens `/merchant help` instead of taking it offline.
 
 The line saying what was left out is part of that budget, not an afterthought to it. It is written by
 `Announcer.Note`, measured before the first field goes in and set after the last one, because a

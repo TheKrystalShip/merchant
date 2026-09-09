@@ -180,8 +180,8 @@ public class SettingsFileTests
     [InlineData("""{ "feeds": { }, "settings": { } }""", "settings")]
     public void A_section_that_is_not_in_the_schema_is_named(string json, string expected)
     {
-        // The one level that used to be read in silence. A catalog under "feed" starts a bot that
-        // announces nothing, and the reason is a single letter nothing else would ever mention.
+        // The root is held to the schema like every level below it. A catalog under "feed" starts
+        // a bot that announces nothing, and the reason is a single letter nothing else would mention.
         List<string> problems = [];
         BotOptions.Load(Settings.Read(json), problems);
 

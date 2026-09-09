@@ -1,6 +1,6 @@
 # Configuration
 
-One file and five environment variables. The file is the catalog and everything about how merchant
+One file and six environment variables. The file is the catalog and everything about how merchant
 runs; the environment carries the one secret and whatever a unit file or a container has to name.
 
 ## The settings file
@@ -80,9 +80,9 @@ A token Discord refuses stops merchant with a non-zero exit rather than being re
 
 ## Environment variables
 
-Four settings can also come from the environment, and **the environment wins over the file**. That
-is how the unit file and the container pass them; the feeds are the catalog and live only in the
-file.
+A handful of settings can also come from the environment, and **the environment wins over the
+file**. That is how the unit file and the container pass them; the feeds are the catalog and live
+only in the file.
 
 | Variable                 | Overrides             |
 | ------------------------ | --------------------- |

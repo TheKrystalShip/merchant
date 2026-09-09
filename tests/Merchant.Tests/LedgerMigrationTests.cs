@@ -8,7 +8,7 @@ namespace Merchant.Tests;
 /// <summary>
 /// What happens to a database that already exists. Every other test in this suite starts from an
 /// empty file, which is the one case that cannot go wrong: the interesting ones are a ledger
-/// carrying a stranger's subscriptions through an upgrade, and a ledger this build must refuse.
+/// carrying live subscriptions through an upgrade, and a ledger this build must refuse.
 /// </summary>
 public class LedgerMigrationTests : IDisposable
 {

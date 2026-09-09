@@ -57,8 +57,8 @@ jobs:
 
       # The same suite under a comma-decimal locale. Merchant runs with globalization on and posts
       # USD prices and English feed dates, so anything it formats or parses against the host's
-      # culture is a bug that only appears on somebody else's machine: "$3,49" in an embed, or a
-      # date the parser refuses. Running it here is how that stays caught.
+      # culture is a bug that only appears on a machine set to another language: "$3,49" in an
+      # embed, or a date the parser refuses. Running it here is how that stays caught.
       - name: Test under a non-English locale
         env:
           LANG: de_DE.UTF-8

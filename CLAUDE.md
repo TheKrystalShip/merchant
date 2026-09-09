@@ -17,15 +17,13 @@ document that explains why.
 ## What this is
 
 merchant announces game deals in Discord channels. Somebody invites it, runs one command per
-channel, and never touches it again. It is not a KGSM component and shares nothing with one: it
-lives in the `tks` workspace beside `magpie` and `moviebot`, runs as the owner's user under
-`systemd --user` or as a container, and depends on nothing of TheKrystalShip's — Discord.Net and
-Microsoft.Data.Sqlite are the whole package surface, and `nuget.config` names only nuget.org so the
-repo builds on a machine that has never held a GitHub Packages token.
+channel, and never touches it again. It runs as the owner's user under `systemd --user` or as a
+container. Discord.Net and Microsoft.Data.Sqlite are the whole package surface, and `nuget.config`
+names only nuget.org, so the repository builds on any machine with the SDK on it.
 
-It was written for somebody else's Discord server, which is the constraint that shapes everything:
-**the person setting it up is not the person who wrote it, and will not read this file.** Every
-design decision in `docs/architecture.md` follows from that, and so should every new one.
+**Whoever sets merchant up does not read the source.** That is the constraint every decision in
+`docs/architecture.md` answers to, and so should every new one: the settings file, the error
+messages and the command replies are the entire interface, and each has to explain itself.
 
 ## Where things are
 
@@ -89,7 +87,7 @@ Each is load-bearing and each is explained in
 - **Schema changes are appended to `Migrations`, never edited.** The array's length is the version.
   Procedure: [docs/development.md](docs/development.md#changing-the-ledgers-schema).
 - **`InvariantGlobalization` stays false**, and every number and date crossing the edge is
-  invariant. The rest of the workspace sets it true — do not inherit that.
+  invariant. Turning it on connects a bot that then throws on the first guild.
 - **The token comes from `MERCHANT_TOKEN` alone**, never the settings file, never the image.
 - **A 401 stops merchant; every other gateway failure is waited out.**
 - **No privileged intents.** `GatewayIntents.Guilds` only.

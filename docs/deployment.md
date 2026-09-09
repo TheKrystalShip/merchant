@@ -93,8 +93,8 @@ path already declared as a volume is discarded by the classic builder, which wou
 owned by root while merchant runs unprivileged and cannot open its own ledger or seed its own
 settings file.
 
-BuildKit keeps the `chown`, so the wrong order builds and passes CI and fails only on somebody
-else's engine — which is the machine this image exists for. Do not reorder it.
+BuildKit keeps the `chown`, so the wrong order builds and passes CI and fails only where the
+classic builder runs it. Do not reorder it.
 
 ## What to back up
 

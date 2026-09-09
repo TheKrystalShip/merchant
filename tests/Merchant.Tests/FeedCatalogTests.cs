@@ -151,8 +151,8 @@ public class FeedCatalogTests
     [Fact]
     public void One_bad_feed_costs_only_itself()
     {
-        // The person editing this file is usually not the person who wrote merchant. A typo in one
-        // feed taking every channel offline is a worse failure than four feeds and a loud log line.
+        // The settings file is edited by somebody who cannot read the code. A typo in one feed
+        // taking every channel offline is a worse failure than four feeds and a loud log line.
         FeedCatalog catalog = Settings.From("""
             {
               "feeds": {

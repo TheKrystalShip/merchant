@@ -1,10 +1,10 @@
 # Build and run merchant. The image is the portable half of the deal: the same artefact runs from a
-# systemd unit on the host that built it, or on somebody else's machine with nothing but a token.
+# systemd unit on the host that built it, or on a host holding nothing but Docker and a token.
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # .editorconfig comes along because the analyzers and style rules run as part of the build: without
-# it the image builds against different rules than anybody else does, and warnings-as-errors turns
+# it the image builds against different rules than a local build does, and warnings-as-errors turns
 # that difference into a failure nobody can reproduce outside Docker.
 COPY Directory.Build.props nuget.config global.json .editorconfig ./
 COPY src/Merchant/Merchant.csproj src/Merchant/

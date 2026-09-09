@@ -19,7 +19,7 @@ public sealed class CheapSharkSource : ISource
 
     /// <summary>Storefront names by CheapShark id, so an embed can say where the deal is.</summary>
     // A lookup table reads as a table. The pragma keeps `dotnet format` from unpacking it to one
-    // entry per line, which is the only place in the tree the formatter and the author disagree.
+    // entry per line, which is the only place in the tree the formatter is overruled.
 #pragma warning disable format
     private static readonly Dictionary<string, string> Stores = new()
     {

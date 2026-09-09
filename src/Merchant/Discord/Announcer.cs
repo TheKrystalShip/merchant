@@ -23,7 +23,7 @@ public static class Announcer
     /// <summary>
     /// Lists a catalog into an embed, taking as many feeds as Discord will carry.
     ///
-    /// The catalog is a file, so its size is somebody else's decision. Discord refuses an embed
+    /// The catalog is a file, so its size is decided by whoever edits it. Discord refuses an embed
     /// whose parts total more than 6000 characters — around thirteen feeds at the length a feed is
     /// allowed — and it refuses it at build time, which would take <c>/merchant help</c> down
     /// altogether rather than shortening it. What fits goes in; the footer says what did not.
