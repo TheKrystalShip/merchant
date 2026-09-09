@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Undoes deploy/install.sh: stops the unit, and removes the published install, the symlink on PATH
-# and the unit file. Needs no sudo, because install.sh needed none.
+# Undoes deploy/install.sh: stops the unit, and removes the published install, whatever a
+# single-file build unpacked into the cache directory, the symlink on PATH and the unit file.
+# Needs no sudo, because install.sh needed none.
 #
 # The token, the settings file and the ledger are left alone, so re-installing lands on the same
 # subscriptions. --purge deletes those too, and the subscriptions with them.
@@ -9,6 +10,7 @@ set -euo pipefail
 prefix="${HOME}/.local/share/merchant"
 state="${HOME}/.local/state/merchant"
 config="${HOME}/.config/merchant"
+cache="${HOME}/.cache/merchant"
 bin="${HOME}/.local/bin/merchant"
 unit="${HOME}/.config/systemd/user/merchant.service"
 
@@ -35,8 +37,8 @@ if [[ -L "$bin" && "$(readlink -f "$bin")" == "${prefix}/"* ]]; then
   rm -f "$bin"
 fi
 
-rm -rf "$prefix"
-echo "Removed ${prefix}."
+rm -rf "$prefix" "$cache"
+echo "Removed ${prefix} and ${cache}."
 
 if [[ "$purge" == true ]]; then
   rm -rf "$config" "$state"

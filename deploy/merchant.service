@@ -1,16 +1,22 @@
 # Merchant — game-deal announcements for Discord.
 #
-# Installed as a user unit.
+# Install it, put the token in, start it:
+#   install -Dm644 merchant.service ~/.config/systemd/user/merchant.service
+#   systemctl --user daemon-reload
+#   $EDITOR ~/.config/merchant/merchant.env
 #   systemctl --user enable --now merchant
 #
-# The token lives in ~/.config/merchant/merchant.env, mode 0600.
-# The feeds live in ~/.config/merchant/appsettings.json — edit it and restart to change them.
-# ProtectHome=read-only means the service cannot write that file, only read it; deploy/install.sh
-# puts it there. Delete it and run `merchant --check` to have it written back.
+# ExecStart is ~/.local/bin/merchant, which is where deploy/install.sh links the binary and where a
+# downloaded build is put by hand. Nothing else in the unit names an install path, so moving the
+# executable is one line to change.
 #
-# MERCHANT_DB names the same path merchant would resolve on its own. It is written out because
-# ReadWritePaths below has to grant exactly one directory, and a unit that grants a path it does
-# not name is a unit nobody can check.
+# The unit creates all three directories merchant uses, so there is nothing to mkdir first:
+#   ~/.config/merchant        the token and the settings file
+#   ~/.local/state/merchant   the ledger
+#   ~/.cache/merchant         what a single-file build unpacks
+# They are the paths merchant resolves on its own, and ReadWritePaths is what exempts them from
+# ProtectSystem= and ProtectHome= — a directory the unit does not name is one the service cannot
+# write.
 [Unit]
 Description=Merchant — game-deal announcements for Discord
 Documentation=https://github.com/TheKrystalShip/merchant
@@ -19,10 +25,28 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-Environment=MERCHANT_DB=%h/.local/state/merchant/merchant.db
-EnvironmentFile=%h/.config/merchant/merchant.env
-ExecStart=%h/.local/share/merchant/merchant
-WorkingDirectory=%h/.local/share/merchant
+ExecStart=%h/.local/bin/merchant
+
+# A downloaded build is one file with the .NET runtime inside it, and it unpacks part of itself
+# before it can run. Left to itself it picks a directory under the home directory, which this unit
+# mounts read-only, and the service dies at exec with nothing but a bundle error to show for it.
+# The cache directory is the right home for it: writable, and kept across restarts so the unpacking
+# happens once rather than on every start.
+Environment=DOTNET_BUNDLE_EXTRACT_BASE_DIR=%C/merchant
+Environment=MERCHANT_CONFIG=%E/merchant/appsettings.json
+Environment=MERCHANT_DB=%S/merchant/merchant.db
+
+# Last, so that a value written in merchant.env wins over the three above. Optional, so that a unit
+# started before the token was written fails with merchant saying which variable is missing rather
+# than with systemd saying a file is.
+EnvironmentFile=-%E/merchant/merchant.env
+
+# Made here rather than with StateDirectory= and friends. For a user unit systemd treats
+# ~/.config/<name> as where state used to live, so a StateDirectory=merchant next to an existing
+# ~/.config/merchant makes ~/.local/state/merchant a symlink into it and the ledger lands among the
+# settings. One mkdir outside the sandbox — that is what the + is — says what happens instead.
+ExecStartPre=+/usr/bin/mkdir -p %E/merchant %S/merchant %C/merchant
+ReadWritePaths=%E/merchant %S/merchant %C/merchant
 
 Restart=on-failure
 RestartSec=15s
@@ -31,7 +55,6 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=%h/.local/state/merchant
 ProtectKernelTunables=true
 ProtectControlGroups=true
 RestrictNamespaces=true

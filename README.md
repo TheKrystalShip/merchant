@@ -72,6 +72,9 @@ tar xzf merchant-<version>-linux-x64.tar.gz && cd merchant-<version>-linux-x64
 MERCHANT_TOKEN=... ./merchant
 ```
 
+The Linux archives carry `merchant.service` as well, so a download can be
+[run as a service](docs/deployment.md#running-a-downloaded-build-as-a-service) without a checkout.
+
 **On a host with systemd** (needs the checkout and the .NET 10 SDK):
 
 ```bash

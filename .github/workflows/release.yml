@@ -123,10 +123,16 @@ jobs:
 
           cp "publish/merchant${EXE}" "$stage/"
 
-          # The settings file and the token file are the whole interface, so the examples travel
-          # with the binary. Without them the download is an executable that names a path nobody
-          # has been shown how to write.
+          # The settings file, the token file and the unit are the whole interface, so they travel
+          # with the binary. Without them the download is an executable that names paths nobody has
+          # been shown how to write, and running it as a service means copying a unit out of a
+          # repository the download exists to avoid.
           cp deploy/appsettings.example.jsonc deploy/merchant.env.example "$stage/"
+
+          # The unit is one of those files on the platforms that have a systemd to give it to.
+          case "$RID" in
+            linux-*) cp deploy/merchant.service "$stage/" ;;
+          esac
 
       - name: Archive ${{ matrix.rid }}
         env:

@@ -101,6 +101,8 @@ only in the file.
 | Token           | `~/.config/merchant/merchant.env`     | `-e MERCHANT_TOKEN`      |
 | Ledger          | `~/.local/state/merchant/merchant.db` | `/data/merchant.db`      |
 | The program     | `~/.local/share/merchant`             | `/app`                   |
+| On `PATH`       | `~/.local/bin/merchant`               | `dotnet /app/merchant.dll` |
+| Unpacked bundle | `~/.cache/merchant`, a downloaded build only | not used          |
 
 Everything editable lives outside the install directory, because `install.sh` republishes over the
 whole of it on an upgrade.

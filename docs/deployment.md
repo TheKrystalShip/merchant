@@ -30,11 +30,15 @@ cd merchant-<version>-linux-x64
 MERCHANT_TOKEN=... ./merchant
 ```
 
-Each archive holds the executable and the two example files that are the whole interface —
-`appsettings.example.jsonc` and `merchant.env.example`. On a first run merchant copies the settings
-example into its config directory and reads that copy from then on, so a fresh download already
-knows about five feeds; edit that copy and restart to change them. `./merchant --check` fetches
-every feed without a token and without touching Discord, and is the right thing to run first.
+Each archive holds the executable and the example files that are the whole interface —
+`appsettings.example.jsonc` and `merchant.env.example`, plus `merchant.service` on the Linux
+builds. On a first run merchant copies the settings example into its config directory and reads
+that copy from then on, so a fresh download already knows about five feeds; edit that copy and
+restart to change them. `./merchant --check` fetches every feed without a token and without
+touching Discord, and is the right thing to run first.
+
+The settings example has to stay beside the executable — that is where merchant looks for the file
+it seeds from — so move the two together, never the binary alone.
 
 `SHA256SUMS` is attached beside the archives:
 
@@ -48,8 +52,30 @@ globalization](architecture.md#globalization-is-on-and-every-value-is-invariant)
 signed or notarized**, being cross-built on Linux, so Gatekeeper refuses one until it is told
 otherwise: `xattr -d com.apple.quarantine ./merchant`.
 
-To run it as a service, take the unit from the systemd section below and point `ExecStart` at
-wherever the executable was unpacked.
+### Running a downloaded build as a service
+
+`merchant.service` in the archive is the same unit the checkout installs, and it expects the
+executable at `~/.local/bin/merchant`. Put it there and it needs no editing:
+
+```bash
+mkdir -p ~/.local/share/merchant ~/.local/bin
+cp merchant appsettings.example.jsonc ~/.local/share/merchant/
+ln -sf ~/.local/share/merchant/merchant ~/.local/bin/merchant
+
+install -Dm644 merchant.service ~/.config/systemd/user/merchant.service
+systemctl --user daemon-reload
+
+install -Dm600 merchant.env.example ~/.config/merchant/merchant.env
+$EDITOR ~/.config/merchant/merchant.env      # put the token in
+systemctl --user enable --now merchant
+```
+
+Nothing else has to be created first: the unit makes its own configuration, state and cache
+directories, and merchant writes the settings file into the first of them on its first start.
+
+`systemctl --user enable --now` starts the service at login rather than at boot. For a bot on a
+headless host, `loginctl enable-linger $USER` is what keeps it running between logins, and it is
+needed for the checkout install just the same.
 
 ## systemd
 
@@ -78,20 +104,42 @@ It also seeds two files and **overwrites neither**:
 That matters because install.sh republishes over the whole install directory: anything editable has
 to live outside it. It is why an upgrade is safe to re-run.
 
-The unit seeds the settings file rather than leaving merchant to do it because it runs with
-`ProtectHome=read-only` — the service can read that file but not write it. The container can, and
-does.
+Seeding them here rather than leaving merchant to do it on its first start means the token and the
+feeds can be edited before anything has been announced.
 
 ### What the unit does
 
-`deploy/merchant.service` runs as a **user** unit, restarts on failure after 15s, and logs to the
-journal under `merchant`. It is hardened: `NoNewPrivileges`, `PrivateTmp`, `ProtectSystem=strict`,
-`ProtectHome=read-only`, and `ReadWritePaths` granting exactly one directory —
-`~/.local/state/merchant`, where the ledger lives.
+`deploy/merchant.service` runs as a **user** unit, starts `~/.local/bin/merchant`, restarts on
+failure after 15s, and logs to the journal under `merchant`. It is hardened: `NoNewPrivileges`,
+`PrivateTmp`, `ProtectSystem=strict` and `ProtectHome=read-only` among them, which between them
+leave nothing on the host writable that the unit has not asked for.
 
-`MERCHANT_DB` is written out in the unit even though it names the path merchant would resolve on its
-own, because `ReadWritePaths` has to grant exactly one directory and a unit that grants a path it
-does not name is a unit nobody can check.
+It uses three directories and **creates all three itself**, with one `mkdir` before it starts, so
+there is nothing to make by hand before a first start:
+
+| Directory                 | What is in it                     |
+| ------------------------- | --------------------------------- |
+| `~/.config/merchant`      | The token and the settings file.  |
+| `~/.local/state/merchant` | The ledger.                       |
+| `~/.cache/merchant`       | What a single-file build unpacks. |
+
+Those are the paths merchant resolves on its own, and `ReadWritePaths` names all three: it is what
+exempts them from `ProtectSystem=` and `ProtectHome=`, and a directory the unit does not name is
+one the service cannot write. `MERCHANT_CONFIG` and `MERCHANT_DB` are written out beside them for
+the same reason — a unit whose paths have to be inferred is a unit nobody can check — and
+`merchant.env` is read after them, so a value set there still wins.
+
+The `mkdir` is an `ExecStartPre` rather than `StateDirectory=` and its siblings, which look like
+the setting for exactly this. For a user unit systemd treats `~/.config/<name>` as where state used
+to live, so `StateDirectory=merchant` beside an existing `~/.config/merchant` makes
+`~/.local/state/merchant` a symlink into it, and the ledger ends up among the settings.
+
+A downloaded build is a single file with the .NET runtime inside it, and it unpacks part of itself
+before it can run. Left to choose for itself it picks a directory under the home directory, which
+this unit mounts read-only, and the service then dies at exec with a bundle error and no gateway
+connection ever attempted. `DOTNET_BUNDLE_EXTRACT_BASE_DIR` points it at the cache directory
+instead, which survives restarts so the unpacking happens once. Deleting that directory costs one
+slower start and nothing else.
 
 If you move the ledger with `databasePath` or `MERCHANT_DB`, **add the new directory to
 `ReadWritePaths`** or the service cannot open it.
@@ -108,7 +156,7 @@ step to remember. `merchant --version` says which build is installed.
 ### Removing it
 
 ```bash
-deploy/uninstall.sh            # stops the unit, removes the install, the symlink and the unit file
+deploy/uninstall.sh            # stops the unit, removes the install, the cache, the symlink and the unit
 deploy/uninstall.sh --purge    # and the token, the settings file and the ledger
 ```
 

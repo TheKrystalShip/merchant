@@ -3,6 +3,25 @@
 Every released version, newest first, and what changed in it. The version is `<Version>` in
 `Directory.Build.props`; `merchant --version` reports the one a running build was compiled with.
 
+## 1.1.1 — 2026-09-09
+
+### Fixed
+
+- A downloaded build started by the unit no longer dies at exec. A single-file build unpacks part
+  of itself before it runs, chose a directory under the read-only home the unit gives it, and
+  failed with a bundle error before Discord was ever reached; it now unpacks into the cache
+  directory systemd makes for it.
+- The unit starts `~/.local/bin/merchant`, which is where install.sh links the binary and where the
+  documentation has always said it is.
+
+### Changed
+
+- The unit creates the three directories it uses — `~/.config/merchant`, `~/.local/state/merchant`
+  and `~/.cache/merchant` — so a first start needs nothing made by hand.
+- The Linux archives carry `merchant.service`, so running a downloaded build as a service no longer
+  means fetching a unit out of the repository.
+- `merchant.env` is read after the unit's own variables, so a value set there wins.
+
 ## 1.1.0 — 2026-09-09
 
 ### Added

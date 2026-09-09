@@ -16,15 +16,17 @@ if ! command -v dotnet >/dev/null 2>&1; then
   exit 1
 fi
 
-mkdir -p "$prefix" "$state" "$config" "$bin" "${HOME}/.config/systemd/user"
+# The unit creates its own configuration, state and cache directories, so only the two this
+# script writes into before anything has started are made here.
+mkdir -p "$prefix" "$config" "$bin" "${HOME}/.config/systemd/user"
 
 if [[ ! -f "${config}/merchant.env" ]]; then
   install -m 600 "${repo}/deploy/merchant.env.example" "${config}/merchant.env"
   echo "Wrote ${config}/merchant.env — put the bot token in it before starting." >&2
 fi
 
-# The feed catalog. merchant would seed this itself on a first run, but the unit runs with the home
-# directory read-only, and seeding here means the feeds can be edited before it ever starts.
+# The feed catalog. merchant seeds this itself on a first run; doing it here means the feeds can be
+# edited before it ever starts, rather than after a first start that announced something.
 if [[ ! -f "${config}/appsettings.json" ]]; then
   install -m 644 "${repo}/deploy/appsettings.example.jsonc" "${config}/appsettings.json"
   echo "Wrote ${config}/appsettings.json — the feeds live there; edit and restart to change them." >&2
