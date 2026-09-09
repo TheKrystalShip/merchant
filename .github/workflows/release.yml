@@ -151,6 +151,11 @@ jobs:
   image:
     needs: check
     runs-on: ubuntu-latest
+    # The build record is a provenance blob for the registry's own UI. Nothing here reads it, and
+    # leaving it on means an artifact the release job has to know to ignore.
+    env:
+      DOCKER_BUILD_RECORD_UPLOAD: false
+      DOCKER_BUILD_SUMMARY: false
     steps:
       - uses: actions/checkout@v4
 
@@ -182,19 +187,27 @@ jobs:
     needs: [check, build, image]
     runs-on: ubuntu-latest
     steps:
+      # Named rather than "everything this run produced": an action is free to upload artifacts of
+      # its own, and a release job that collects whatever it finds fails on the first one that does.
       - uses: actions/download-artifact@v4
         with:
-          path: incoming
+          pattern: archive-*
+          merge-multiple: true
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: notes
+          path: notes
 
       # A checksum file is what somebody who downloaded over a network they do not trust can act
-      # on. It is written against the archives themselves, in the directory they end up in, so the
-      # names in it are the names on the release page.
-      - name: Collect the archives
+      # on. It is written in the directory the archives are in, so the names in it are the names on
+      # the release page.
+      - name: Checksum the archives
         run: |
-          mkdir -p dist
-          find incoming -name 'merchant-*' -type f -exec mv {} dist/ \;
-          (cd dist && sha256sum merchant-* > SHA256SUMS)
-          cat dist/SHA256SUMS
+          cd dist
+          sha256sum merchant-* > SHA256SUMS
+          cat SHA256SUMS
 
       - name: Publish the release
         env:
@@ -202,5 +215,5 @@ jobs:
         run: |
           gh release create "${GITHUB_REF_NAME}" \
             --title "merchant ${GITHUB_REF_NAME}" \
-            --notes-file incoming/notes/notes.md \
+            --notes-file notes/notes.md \
             dist/*
