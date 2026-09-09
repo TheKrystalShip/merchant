@@ -11,7 +11,7 @@
 
   <ItemGroup>
     <PackageReference Include="Discord.Net" Version="3.20.1" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
     <!-- Microsoft.Data.Sqlite still resolves SQLitePCLRaw 2.1.11, which carries GHSA-2m69-gcr7-jv3q.
          Pinned forward until the Sqlite package's own floor moves past it. -->
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.13" />
