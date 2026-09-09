@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/Merchant/Merchant.csproj" />
+  <Project Path="tests/Merchant.Tests/Merchant.Tests.csproj" />
+</Solution>

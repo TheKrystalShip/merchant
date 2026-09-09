@@ -1,0 +1,13 @@
+# Without this, COPY src/ src/ drops the host's obj/ over the restore the image just did, and the
+# publish fails resolving packages against a project.assets.json written for paths outside the image.
+**/bin/
+**/obj/
+**/artifacts/
+.git/
+*.db
+*.db-shm
+*.db-wal
+.env
+tests/
+.github/
+.vscode/

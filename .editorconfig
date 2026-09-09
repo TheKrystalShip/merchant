@@ -1,0 +1,125 @@
+# The house style, written down so it is enforceable rather than tribal.
+# CI runs `dotnet format --verify-no-changes`; `dotnet format` fixes what it can.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{json,jsonc,yml,yaml,csproj,props,slnx,xml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.sh]
+indent_size = 2
+
+[*.cs]
+# No analyzer enforces this — Roslyn has no line-length rule and `dotnet format` does not wrap — so
+# CI checks it directly, next to the rules that do enforce themselves. An editor reads it from here.
+max_line_length = 110
+
+# ---- namespaces and usings -------------------------------------------------------------------
+
+csharp_style_namespace_declarations = file_scoped:warning
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+csharp_using_directive_placement = outside_namespace:warning
+
+# ---- types are written out ---------------------------------------------------------------------
+# `var` hides the type at exactly the place a reader of unfamiliar code wants it. There are three
+# uses of it in the whole tree, all where the type is on the right-hand side already.
+
+csharp_style_var_for_built_in_types = false:warning
+csharp_style_var_when_type_is_apparent = false:silent
+csharp_style_var_elsewhere = false:warning
+
+# ---- expression style --------------------------------------------------------------------------
+
+csharp_style_expression_bodied_methods = when_on_single_line:silent
+csharp_style_expression_bodied_properties = when_on_single_line:silent
+csharp_style_expression_bodied_accessors = when_on_single_line:silent
+# A constructor is written out. The option only ever suppresses the offer to convert one — nothing
+# reports a primary constructor that is already there — so this is honoured by hand, and a class
+# taking its dependencies into readonly fields is what the rest of the tree looks like.
+csharp_style_prefer_primary_constructors = false:silent
+csharp_prefer_braces = true:warning
+csharp_style_prefer_pattern_matching = true:suggestion
+csharp_style_prefer_switch_expression = true:suggestion
+dotnet_style_collection_initializer = true:suggestion
+dotnet_style_object_initializer = true:suggestion
+dotnet_style_prefer_conditional_expression_over_return = false:silent
+
+# ---- naming ------------------------------------------------------------------------------------
+# Private instance fields are _camelCase; anything static and readonly is PascalCase, because it is
+# a constant in everything but the keyword. Rules are matched in the order they appear here, so the
+# static rule has to come first.
+
+dotnet_naming_rule.static_readonly_pascal.symbols = static_readonly_fields
+dotnet_naming_rule.static_readonly_pascal.style = pascal
+dotnet_naming_rule.static_readonly_pascal.severity = warning
+dotnet_naming_symbols.static_readonly_fields.applicable_kinds = field
+dotnet_naming_symbols.static_readonly_fields.applicable_accessibilities = *
+dotnet_naming_symbols.static_readonly_fields.required_modifiers = static, readonly
+
+dotnet_naming_rule.constants_pascal.symbols = constants
+dotnet_naming_rule.constants_pascal.style = pascal
+dotnet_naming_rule.constants_pascal.severity = warning
+dotnet_naming_symbols.constants.applicable_kinds = field
+dotnet_naming_symbols.constants.applicable_accessibilities = *
+dotnet_naming_symbols.constants.required_modifiers = const
+
+dotnet_naming_rule.private_fields_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_underscore.style = underscore_camel
+dotnet_naming_rule.private_fields_underscore.severity = warning
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_symbols.private_fields.required_modifiers =
+
+dotnet_naming_style.pascal.capitalization = pascal_case
+dotnet_naming_style.underscore_camel.capitalization = camel_case
+dotnet_naming_style.underscore_camel.required_prefix = _
+
+# ---- analyzers ---------------------------------------------------------------------------------
+# The .NET analyzers run at build (EnforceCodeStyleInBuild, AnalysisLevel in Directory.Build.props)
+# and TreatWarningsAsErrors makes each one a build failure. Everything they report is fixed rather
+# than muted, except these three, each declined for a stated reason.
+
+# Use LoggerMessage delegates. A perf rule for logging in a hot path; merchant logs a handful of
+# lines per sweep, thirty minutes apart. Adopting it would put every log line behind a generated
+# partial and buy nothing measurable.
+dotnet_diagnostic.CA1848.severity = none
+
+# Evaluation of a log argument may be expensive. The companion to the above, and it fires on the
+# same call sites for the same reason: the arguments here are a list count and a snowflake.
+dotnet_diagnostic.CA1873.severity = none
+
+# Identifier contains a type name. ConfigRead reads one setting per method and is named for what it
+# reads — Int, Decimal, Bool, Enum, Colour, Strings. That is the point of the type, and Integer or
+# Number would only be further from what the caller is asking for.
+dotnet_diagnostic.CA1720.severity = none
+
+# ---- documentation -----------------------------------------------------------------------------
+# Public members carry an XML doc saying why, not what. Kept at suggestion: the compiler's own
+# CS1591 would be an error here (TreatWarningsAsErrors), and a missing doc is a review note.
+
+dotnet_diagnostic.CS1591.severity = suggestion
+
+# ---- tests -------------------------------------------------------------------------------------
+
+[tests/**.cs]
+# A theory row is a settings document, and one per line is what makes the set readable as a table of
+# the mistakes the file is held to. Wrapping them hides the case each one is testing.
+max_line_length = off
+
+# A test is named as the sentence it asserts — Subscribing_twice_updates_rather_than_duplicates —
+# because the runner's output is then a list of the things merchant is known to do. That reads
+# better than any PascalCase spelling of the same words, and the rule exists for public API surface
+# a caller has to type, which a test method is not.
+dotnet_diagnostic.CA1707.severity = none

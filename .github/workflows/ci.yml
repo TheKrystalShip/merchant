@@ -1,0 +1,74 @@
+# What the repository asserts about itself on every push: it is formatted the way .editorconfig
+# says, it builds with the analyzers clean, its tests pass in English and in a locale that writes
+# numbers differently, its shell scripts pass shellcheck, and the container still builds.
+#
+# Every one of these is a command a person can run locally, and none of them reaches the network
+# except to restore packages: the feeds in the tests are captured files.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # Keyed on the project files, which is what a restore reads: an unchanged dependency set
+      # reuses the packages rather than fetching them again for every job on every push.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
+          restore-keys: nuget-
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Check formatting
+        run: dotnet format --verify-no-changes --no-restore
+
+      - name: Build
+        run: dotnet build -c Release --no-restore
+
+      - name: Test
+        run: dotnet test -c Release --no-build --verbosity normal
+
+      # The same suite under a comma-decimal locale. Merchant runs with globalization on and posts
+      # USD prices and English feed dates, so anything it formats or parses against the host's
+      # culture is a bug that only appears on a machine set to another language: "$3,49" in an
+      # embed, or a date the parser refuses. Running it here is how that stays caught.
+      - name: Test under a non-English locale
+        env:
+          LANG: de_DE.UTF-8
+          LC_ALL: de_DE.UTF-8
+        run: dotnet test -c Release --no-build
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The line length .editorconfig states, which no analyzer can report, and shellcheck over
+      # deploy/ and scripts/ — the paths somebody meets on a machine nobody here can watch fail.
+      # The same script a person runs, so there is no rule that only exists in this file.
+      - name: scripts/lint.sh
+        run: scripts/lint.sh
+
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The image is how somebody runs merchant without a .NET SDK, so a Dockerfile that no longer
+      # builds is a broken deploy path even when every test passes.
+      - name: Build the image
+        run: docker build -t merchant:ci .

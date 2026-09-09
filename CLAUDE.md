@@ -1,0 +1,121 @@
+# CLAUDE.md
+
+Guidance for Claude Code working in this repository.
+
+**The documentation lives in [`docs/`](docs/README.md), and it is the reference — not this file.**
+This is orientation: what merchant is, where things are, and what not to break without reading the
+document that explains why.
+
+| Before you… | Read |
+| ----------- | ---- |
+| change the sweep, the ledger, the catalog or anything about Discord | [docs/architecture.md](docs/architecture.md) |
+| build, test, add a source kind, or change the schema | [docs/development.md](docs/development.md) |
+| touch the settings file's shape | [docs/configuration.md](docs/configuration.md), [docs/feeds.md](docs/feeds.md) |
+| touch `deploy/`, the unit, `compose.yaml` or the `Dockerfile` | [docs/deployment.md](docs/deployment.md) |
+| cut a release, or change what a version means | [docs/development.md](docs/development.md#versioning-and-releases) |
+| answer "why is a channel quiet" | [docs/operations.md](docs/operations.md) |
+
+## What this is
+
+merchant announces game deals in Discord channels. Somebody invites it, runs one command per
+channel, and never touches it again. It runs as the owner's user under `systemd --user` or as a
+container. Discord.Net and Microsoft.Data.Sqlite are the whole package surface, and `nuget.config`
+names only nuget.org, so the repository builds on any machine with the SDK on it.
+
+**Whoever sets merchant up does not read the source.** That is the constraint every decision in
+`docs/architecture.md` answers to, and so should every new one: the settings file, the error
+messages and the command replies are the entire interface, and each has to explain itself.
+
+## Where things are
+
+```
+src/Merchant/
+  Program.cs           composition root; where a new ISourceFactory is registered
+  Build.cs             what this build calls itself: --version, and the user agent
+  MerchantConfig.cs    where the settings file and the ledger are found
+  BotOptions.cs        the bot section, and the check that the file has no unknown keys
+  Feeds/               Schema.cs (the settings vocabulary), FeedCatalog, SourceRegistry, Factories/
+  Sources/             the drivers: RssSource, CheapSharkSource, Links.Http
+  Discord/             Sweeper, Announcer, MerchantModule, FeedAutocomplete, GatewayFailure
+  Storage/Ledger.cs    SQLite, and the migration list
+tests/Merchant.Tests/  xUnit; captured feed documents under Fixtures/
+deploy/                install.sh, uninstall.sh, merchant.service, the example settings and env files
+scripts/               one-line wrappers over dotnet build / test / format / run, and lint.sh
+compose.yaml           the container deploy people actually use, published image and all
+CHANGELOG.md           every released version and what changed in it
+docs/                  the manuals
+```
+
+## Working on it
+
+```bash
+dotnet build                                      # analyzers and style rules run here, as errors
+dotnet test                                       # no network: the feeds in them are captured files
+dotnet format                                     # the style in .editorconfig, applied
+scripts/lint.sh                                   # the line length, and shellcheck
+dotnet run --project src/Merchant -- --check      # validate the settings file, fetch every feed
+```
+
+`scripts/build.sh`, `test.sh`, `format.sh` and `run.sh` are one-line wrappers over exactly those
+`dotnet` commands, taking the same arguments. Nothing lives only inside one, so use whichever is
+shorter to type. `scripts/lint.sh` is not a wrapper — it is the line length `.editorconfig` states,
+which no analyzer reports, and `shellcheck` — and CI runs that file rather than a copy of it.
+
+Nothing is bespoke: an ordinary .NET solution, and CI runs what a person runs locally, plus
+`docker build` and the tests again under `de_DE.UTF-8`.
+
+Set `MERCHANT_DEV_GUILD` when running against a real server: guild commands register instantly,
+global ones take up to an hour.
+
+**Style and lint are the build's job, not review's.** `.editorconfig` plus
+`EnforceCodeStyleInBuild` and `TreatWarningsAsErrors`. Fix what an analyzer reports rather than
+muting it; if a rule genuinely has to go, switch it off beside a written reason, and never lower
+`AnalysisLevel`. Details and the three existing exceptions:
+[docs/development.md](docs/development.md#style-is-the-builds-job-not-reviews).
+
+## Do not break these
+
+Each is load-bearing and each is explained in
+[docs/architecture.md](docs/architecture.md) — read the reasoning before deciding one is in the way.
+
+- **The catalog is data; drivers are code.** Feeds live in `appsettings.json`. A change that makes
+  somebody paste a feed URL into a *command* is the wrong change. Resist a generic JSON-mapping
+  driver.
+- **The settings vocabulary is `Feeds/Schema.cs`.** No key written as a literal anywhere else. A
+  schema change lands in three places: `Schema.cs`, the `appsettings.example.jsonc` header, and
+  `docs/feeds.md`.
+- **One malformed feed is dropped and named; an empty catalog is fatal.** Every rejection names its
+  feed and what was expected — that message is the whole interface for somebody with a text editor.
+- **Sweeping and posting stay separate.** One fetch interval, per-subscription cadences. It is the
+  only reason a weekly channel exists, and a sweep that fetched nothing still posts.
+- **Only what reached the channel is marked sent**, and the backlog's two orderings are deliberate.
+- **The ledger is one connection behind one gate.** An ungated write from a command lands inside the
+  sweep's open transaction; `LedgerConcurrencyTests` reproduces it.
+- **Schema changes are appended to `Migrations`, never edited.** The array's length is the version.
+  Procedure: [docs/development.md](docs/development.md#changing-the-ledgers-schema).
+- **`InvariantGlobalization` stays false**, and every number and date crossing the edge is
+  invariant. Turning it on connects a bot that then throws on the first guild.
+- **The token comes from `MERCHANT_TOKEN` alone**, never the settings file, never the image.
+- **A 401 stops merchant; every other gateway failure is waited out.**
+- **No privileged intents.** `GatewayIntents.Guilds` only.
+- **Embeds are packed to Discord's 6000-character budget**, including the line that says what was
+  left out.
+- **Every command reply is ephemeral**, and `/merchant add` checks channel permissions before it
+  writes.
+- **The version is `<Version>` in `Directory.Build.props` and nowhere else.** A release is that
+  number bumped, a `CHANGELOG` section headed with it, and a pushed `v<version>` tag; the release
+  workflow refuses a tag that disagrees with either.
+
+## Tests
+
+Parser fixtures are **captured documents**, not hand-written XML — a hand-written fixture agrees
+with the parser by construction and proves nothing. `FeedCatalogTests` holds the shipped settings
+file to account rather than the code. `LedgerMigrationTests` is the only suite that starts from a
+database that already exists, and builds the old shape by hand. What each one pins:
+[docs/development.md](docs/development.md#tests).
+
+## When documentation changes
+
+The docs are the reference, so a behaviour change that a person could notice belongs in the
+matching document under `docs/` in the same commit. Keep this file short: if something here grows
+past a few lines of reasoning, it belongs in `docs/` with a pointer left behind.

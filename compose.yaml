@@ -1,0 +1,28 @@
+# Running merchant with Docker Compose. This file and a merchant.env beside it are the whole of
+# what a host needs: the image is published, so nothing is cloned and no SDK is installed.
+#
+#   curl -O https://raw.githubusercontent.com/TheKrystalShip/merchant/main/compose.yaml
+#   printf 'MERCHANT_TOKEN=%s\n' "the-bot-token" > merchant.env && chmod 600 merchant.env
+#   docker compose up -d
+#
+# The volume holds both the settings file and the ledger, so upgrading is `docker compose pull`
+# and `up -d`: the feeds and the subscriptions come across, and the schema comes up on its own.
+services:
+  merchant:
+    image: ghcr.io/thekrystalship/merchant:latest
+    # To run the checkout instead of the published image, comment the line above and uncomment
+    # this one. Everything else is the same.
+    # build: .
+    container_name: merchant
+
+    # Without this the bot is up until the first host reboot and then quietly is not.
+    restart: unless-stopped
+
+    # MERCHANT_TOKEN, and nothing else that matters. Keep it 0600; it is the whole secret.
+    env_file: merchant.env
+
+    volumes:
+      - merchant-data:/data
+
+volumes:
+  merchant-data:

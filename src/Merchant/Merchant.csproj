@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Merchant</RootNamespace>
+    <AssemblyName>merchant</AssemblyName>
+    <!-- Discord.Net's interaction framework finds command modules by reflection, so this one does
+         not trim and does not go AOT. It is a resident gateway process either way. -->
+    <PublishTrimmed>false</PublishTrimmed>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Discord.Net" Version="3.20.1" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.5" />
+    <!-- Microsoft.Data.Sqlite still resolves SQLitePCLRaw 2.1.11, which carries GHSA-2m69-gcr7-jv3q.
+         Pinned forward until the Sqlite package's own floor moves past it. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.13" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The catalog is data, so it ships as a file beside the binary rather than compiled in.
+         merchant copies it into the config directory on a first run and reads that copy from then
+         on: nothing in the assembly knows what a feed is. -->
+    <Content Include="../../deploy/appsettings.example.jsonc"
+             Link="appsettings.example.jsonc"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Merchant.Tests" />
+  </ItemGroup>
+
+</Project>

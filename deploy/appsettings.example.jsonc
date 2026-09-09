@@ -1,0 +1,140 @@
+// merchant's settings. This file is the whole catalog: every feed merchant can post is described
+// here, and adding, changing or removing one is an edit and a restart. Nothing is rebuilt.
+//
+// It lives at ~/.config/merchant/appsettings.json, or wherever MERCHANT_CONFIG points — the
+// container sets that to /data/appsettings.json. Delete it and merchant writes this example back.
+//
+// Comments and trailing commas are allowed. Check an edit with:  merchant --check
+//
+// The schema below is the short version. The full one, with examples:
+// https://github.com/TheKrystalShip/merchant/blob/main/docs/feeds.md
+//
+// ── Schema ──────────────────────────────────────────────────────────────────────────────────
+//
+// "bot"                        every setting optional
+//   "databasePath"   string           where the ledger lives    default: ~/.local/state/merchant/merchant.db
+//   "sweepMinutes"   number, 5-720    how often every feed is fetched     default: 30
+//   "userAgent"      string           sent on every request         default: merchant/<version> (…)
+//   "devGuildId"     number           register commands to one server     default: register globally
+//   The bot token is NOT read from this file. It comes from MERCHANT_TOKEN and nowhere else.
+//
+// "logging"                    read by the host, not by merchant, and optional
+//   Turn the log up when a channel misbehaves: "logLevel": { "default": "Debug" }.
+//
+// "feeds"                      one entry per feed, named by its key
+//   The key is lower-case words joined by hyphens, up to 100 characters: "free-games". It is what
+//   the ledger stores, so renaming one orphans the channels already subscribed to it.
+//
+//   "label"          REQUIRED  string, <= 100   shown in the menu and on every embed
+//   "description"    REQUIRED  string, <= 400   one line, shown in the menu and /merchant help
+//   "source"         REQUIRED  object           where the items come from, see below
+//   "channel"        optional  string           suggested channel name       default: the key
+//   "cadence"        optional  Live|Daily|Weekly  how often it posts         default: Daily
+//   "colour"         optional  "#RRGGBB"        embed accent                 default: #5865F2
+//   "enabled"        optional  true|false       false parks it, keeping it   default: true
+//
+//   "source": { "type": "rss", … }
+//     "urls"         REQUIRED  array of one or more full http(s) addresses, merged into one feed.
+//                              RSS 1.0, RSS 2.0 and Atom all work without being told which.
+//                              A URL may contain {region}, filled in per server from whatever
+//                              /merchant region is set to. {currency} is filled in the same way
+//                              and no feed needs it: neither source prices in anything but USD.
+//
+//   "source": { "type": "cheapshark", … }       always priced in USD, whatever the region is
+//     "upperPrice"   optional  number above 0   sale-price ceiling           default: no ceiling
+//     "minMetacritic" optional number, 0-100    review-score floor           default: no floor
+//     "sortBy"       optional  one of: DealRating, Title, Savings, Price, Metacritic, Reviews,
+//                              Release, Store, Recent. Spaces are ignored, so "Deal Rating"
+//                              is read the same way                          default: DealRating
+//
+// A feed with a mistake in it is dropped at startup with a line naming it and what was expected;
+// every other feed keeps running. A file with no usable feeds at all stops merchant. A key that is
+// not in this schema — at any level, including a misspelled section — is named at startup too.
+//
+// ────────────────────────────────────────────────────────────────────────────────────────────
+{
+  "bot": {
+    // The ledger defaults to ~/.local/state/merchant/merchant.db. Name a path here only to put it
+    // somewhere else — a relative one is read from wherever merchant happens to be started.
+    "sweepMinutes": 30
+    // The default user agent names merchant and its version, which is what the feeds want to see.
+    // "userAgent": "something-else/1.0 (+https://example.invalid)"
+    // "devGuildId": 123456789012345678
+  },
+
+  "feeds": {
+
+    "top-week": {
+      "label": "Top Games of the Week",
+      "description": "Steam's ten best sellers of the week, ranked. Valve publishes it every Tuesday.",
+      "channel": "top-games-of-the-week",
+      // Weekly, not Live: the chart barely moves, so posting it as it appears would repost the
+      // same ten games every sweep for seven days.
+      "cadence": "Weekly",
+      "colour": "#1B2838",
+      "source": {
+        "type": "rss",
+        "urls": [ "https://store.steampowered.com/feeds/weeklytopsellers.xml" ]
+      }
+    },
+
+    "under-10": {
+      "label": "Games Under $10",
+      "description": "Everything discounted to ten or less, best deals first. The bargain bin, filtered.",
+      "channel": "games-under-10",
+      "cadence": "Daily",
+      "colour": "#C24A12",
+      // CheapShark rather than a price-filtered IsThereAnyDeal feed: ITAD encodes its filters into
+      // an opaque token its own site mints, so a price ceiling cannot be written into a URL.
+      "source": {
+        "type": "cheapshark",
+        "upperPrice": 10,
+        "sortBy": "DealRating"
+      }
+    },
+
+    "best-deals": {
+      "label": "Best Game Deals",
+      "description": "Big discounts on games that actually reviewed well — 75+ on Metacritic.",
+      "channel": "best-game-deals",
+      "cadence": "Daily",
+      "colour": "#2A7150",
+      "source": {
+        "type": "cheapshark",
+        "minMetacritic": 75,
+        "sortBy": "Savings"
+      }
+    },
+
+    "worth-playing": {
+      "label": "Worth Checking Out",
+      "description": "Picks from Rock Paper Shotgun, PC Gamer and the top of r/GameDeals this week.",
+      "channel": "worth-checking-out",
+      "cadence": "Daily",
+      "colour": "#453EA0",
+      "source": {
+        "type": "rss",
+        "urls": [
+          "https://www.rockpapershotgun.com/feed",
+          "https://www.pcgamer.com/rss/",
+          "https://www.reddit.com/r/GameDeals/top/.rss?t=week&limit=25"
+        ]
+      }
+    },
+
+    "free-games": {
+      "label": "Free Games & Giveaways",
+      "description": "Games that are free to keep right now, while the giveaway lasts.",
+      "channel": "free-games",
+      // Live: a giveaway that is announced a day late is a giveaway somebody missed.
+      "cadence": "Live",
+      "colour": "#9B59B6",
+      "source": {
+        "type": "rss",
+        // {region} becomes the server's country code — giveaways vary by storefront.
+        "urls": [ "https://isthereanydeal.com/feeds/{region}/giveaways.rss" ]
+      }
+    }
+
+  }
+}

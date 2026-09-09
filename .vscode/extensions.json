@@ -1,0 +1,8 @@
+{
+  // What VS Code needs to show this repository's own rules while it is being edited, rather than
+  // at build time. Nothing here is required to build: `dotnet build` and CI enforce the same rules.
+  "recommendations": [
+    "ms-dotnettools.csdevkit",
+    "editorconfig.editorconfig"
+  ]
+}

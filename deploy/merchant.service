@@ -1,0 +1,46 @@
+# Merchant — game-deal announcements for Discord.
+#
+# Installed as a user unit.
+#   systemctl --user enable --now merchant
+#
+# The token lives in ~/.config/merchant/merchant.env, mode 0600.
+# The feeds live in ~/.config/merchant/appsettings.json — edit it and restart to change them.
+# ProtectHome=read-only means the service cannot write that file, only read it; deploy/install.sh
+# puts it there. Delete it and run `merchant --check` to have it written back.
+#
+# MERCHANT_DB names the same path merchant would resolve on its own. It is written out because
+# ReadWritePaths below has to grant exactly one directory, and a unit that grants a path it does
+# not name is a unit nobody can check.
+[Unit]
+Description=Merchant — game-deal announcements for Discord
+Documentation=https://github.com/TheKrystalShip/merchant
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=MERCHANT_DB=%h/.local/state/merchant/merchant.db
+EnvironmentFile=%h/.config/merchant/merchant.env
+ExecStart=%h/.local/share/merchant/merchant
+WorkingDirectory=%h/.local/share/merchant
+
+Restart=on-failure
+RestartSec=15s
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.local/state/merchant
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=merchant
+
+[Install]
+WantedBy=default.target

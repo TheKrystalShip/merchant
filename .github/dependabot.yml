@@ -1,0 +1,21 @@
+# Merchant pins a transitive package forward to stay off a published advisory, and nothing about
+# that pin announces the day it can go. These do: an update arrives as a pull request that CI has
+# already run, rather than as an audit somebody has to remember to perform.
+version: 2
+
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: monthly

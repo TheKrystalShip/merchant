@@ -1,0 +1,94 @@
+# A release is a pushed tag and nothing else. Everything below is derived from it: the version is
+# checked against the one in Directory.Build.props, the notes are the CHANGELOG section named after
+# it, and the image is published to the registry under the same number.
+#
+# To cut one: bump <Version>, write the CHANGELOG section, commit both, then
+#   git tag -a v1.2.0 -m "merchant v1.2.0" && git push --follow-tags
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # The tag is a claim about what is being released, and Directory.Build.props is what the
+      # binary will actually report. A release where those disagree ships a build that lies about
+      # its own version, so it is refused here rather than discovered later.
+      - name: The tag and the version agree
+        id: version
+        run: |
+          version="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props)"
+          tag="${GITHUB_REF_NAME#v}"
+
+          if [ "$version" != "$tag" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match <Version>${version}</Version> in" \
+                 "Directory.Build.props. Bump one of them." >&2
+            exit 1
+          fi
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')" \
+            >> "$GITHUB_OUTPUT"
+
+      # A released version whose changes nobody wrote down is the version somebody upgrading cannot
+      # judge, so the section has to exist before the release does.
+      - name: The CHANGELOG has a section for it
+        id: notes
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          awk -v v="## ${version}" '
+            $0 ~ "^" v " " || $0 == v { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > notes.md
+
+          if [ ! -s notes.md ]; then
+            echo "No '## ${version}' section in CHANGELOG.md. Write one and re-tag." >&2
+            exit 1
+          fi
+
+      - name: Test
+        run: dotnet test -c Release
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # arm64 as well as amd64: a Discord bot that posts a few embeds an hour is exactly what ends
+      # up on a Raspberry Pi, and cross-building the SDK image on the Pi itself is punishing.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ steps.version.outputs.image }}:${{ steps.version.outputs.version }}
+            ${{ steps.version.outputs.image }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "merchant ${GITHUB_REF_NAME}" \
+            --notes-file notes.md
