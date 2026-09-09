@@ -1,6 +1,7 @@
 # A release is a pushed tag and nothing else. Everything below is derived from it: the version is
 # checked against the one in Directory.Build.props, the notes are the CHANGELOG section named after
-# it, and the image is published to the registry under the same number.
+# it, the image is published to the registry under the same number, and one archive per platform is
+# attached so that running merchant needs neither a checkout nor an SDK.
 #
 # To cut one: bump <Version>, write the CHANGELOG section, commit both, then
 #   git tag -a v1.2.0 -m "merchant v1.2.0" && git push --follow-tags
@@ -15,8 +16,13 @@ permissions:
   packages: write
 
 jobs:
-  release:
+  # Everything that can refuse the release happens here, before anything is built for five
+  # platforms and two architectures. A tag that should not have been pushed costs one short job.
+  check:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      image: ${{ steps.version.outputs.image }}
     steps:
       - uses: actions/checkout@v4
 
@@ -63,6 +69,91 @@ jobs:
       - name: Test
         run: dotnet test -c Release
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: notes
+          path: notes.md
+
+  # One archive per platform, so that somebody who wants to run merchant and not work on it needs
+  # neither the repository nor the SDK. Each is self-contained — the .NET runtime is inside the
+  # executable — and single-file, because the alternative is asking a person to keep a directory of
+  # a couple of hundred files intact. Nothing is trimmed: Discord.Net finds command modules by
+  # reflection, so a trimmed build loses its commands at run time rather than at build time.
+  build:
+    needs: check
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - rid: linux-x64
+          - rid: linux-arm64
+          - rid: osx-x64
+          - rid: osx-arm64
+          - rid: win-x64
+            exe: .exe
+            zip: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # Cross-publishing every target from one runner is only possible because none of this is
+      # trimmed or AOT-compiled: the bundler copies a runtime it never has to execute.
+      - name: Publish ${{ matrix.rid }}
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+          RID: ${{ matrix.rid }}
+          EXE: ${{ matrix.exe }}
+        run: |
+          stage="stage/merchant-${VERSION}-${RID}"
+          mkdir -p "$stage"
+
+          dotnet publish src/Merchant/Merchant.csproj \
+            -c Release \
+            -r "$RID" \
+            --self-contained true \
+            -p:PublishSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:EnableCompressionInSingleFile=true \
+            -p:DebugType=none \
+            -o publish
+
+          cp "publish/merchant${EXE}" "$stage/"
+
+          # The settings file and the token file are the whole interface, so the examples travel
+          # with the binary. Without them the download is an executable that names a path nobody
+          # has been shown how to write.
+          cp deploy/appsettings.example.jsonc deploy/merchant.env.example "$stage/"
+
+      - name: Archive ${{ matrix.rid }}
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+          RID: ${{ matrix.rid }}
+        run: |
+          name="merchant-${VERSION}-${RID}"
+          mkdir -p dist
+
+          if [ "${{ matrix.zip }}" = "true" ]; then
+            (cd stage && zip -qr "../dist/${name}.zip" "$name")
+          else
+            tar czf "dist/${name}.tar.gz" -C stage "$name"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: archive-${{ matrix.rid }}
+          path: dist/*
+          if-no-files-found: error
+
+  image:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
@@ -80,10 +171,30 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ${{ steps.version.outputs.image }}:${{ steps.version.outputs.version }}
-            ${{ steps.version.outputs.image }}:latest
+            ${{ needs.check.outputs.image }}:${{ needs.check.outputs.version }}
+            ${{ needs.check.outputs.image }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Last, and only once the image and every archive exist. A release that appears before its
+  # downloads do is a release somebody follows to an empty page.
+  release:
+    needs: [check, build, image]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: incoming
+
+      # A checksum file is what somebody who downloaded over a network they do not trust can act
+      # on. It is written against the archives themselves, in the directory they end up in, so the
+      # names in it are the names on the release page.
+      - name: Collect the archives
+        run: |
+          mkdir -p dist
+          find incoming -name 'merchant-*' -type f -exec mv {} dist/ \;
+          (cd dist && sha256sum merchant-* > SHA256SUMS)
+          cat dist/SHA256SUMS
 
       - name: Publish the release
         env:
@@ -91,4 +202,5 @@ jobs:
         run: |
           gh release create "${GITHUB_REF_NAME}" \
             --title "merchant ${GITHUB_REF_NAME}" \
-            --notes-file notes.md
+            --notes-file incoming/notes/notes.md \
+            dist/*

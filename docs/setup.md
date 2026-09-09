@@ -25,8 +25,18 @@ channels it should post in — `/merchant add` checks them and will tell you wha
 
 ## 2. Merchant itself
 
-Two supported ways, and they install the same build. Pick one; the [deployment
-guide](deployment.md) has the detail behind both.
+Three supported ways, and they run the same build. Pick one; the [deployment
+guide](deployment.md) has the detail behind all of them.
+
+**As a download** — needs nothing at all, because the .NET runtime is inside the executable. [The
+releases page](https://github.com/TheKrystalShip/merchant/releases) carries one archive per
+platform, for Linux, macOS and Windows, on x64 and on arm64:
+
+```bash
+tar xzf merchant-<version>-linux-x64.tar.gz && cd merchant-<version>-linux-x64
+./merchant --check                           # fetch every feed, without a token
+MERCHANT_TOKEN=... ./merchant
+```
 
 **As a container** — needs nothing but Docker, because the image is published:
 
@@ -53,7 +63,7 @@ systemctl --user enable --now merchant
 journalctl --user -u merchant -f
 ```
 
-Either way the token is passed in the environment and never written into the settings file. See
+Whichever it is, the token is passed in the environment and never written into the settings file. See
 [Configuration](configuration.md) for where everything lands on disk.
 
 ## 3. One command per channel

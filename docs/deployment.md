@@ -1,13 +1,55 @@
 # Deployment
 
-Two supported ways to run merchant, both installing the same build. The systemd path is for the
-host you control; the container is the portable half — same code, token passed at run time, ledger
-on a volume.
+Three supported ways to run merchant, all of them the same code. A **downloaded build** is the
+shortest — one executable with the runtime inside it, and nothing else to install. The **systemd**
+path builds from the checkout and is for a host you control. The **container** is the portable
+half — token passed at run time, ledger on a volume.
 
-Neither bakes in a runtime identifier. A framework-dependent publish runs on whatever architecture
-the host is, so the same command installs on an arm64 box as on an x86-64 one. The floor that does
-matter is the SDK version in `global.json`, where an old one is refused in a sentence rather than a
-resolver error.
+Only the downloaded build names an architecture, and it names it in the file you pick. Building
+from the checkout does not: a framework-dependent publish runs on whatever the host is, so the same
+command installs on an arm64 box as on an x86-64 one. The floor that does matter there is the SDK
+version in `global.json`, where an old one is refused in a sentence rather than a resolver error.
+
+## A downloaded build
+
+Every release carries one archive per platform, attached to it on [the releases
+page](https://github.com/TheKrystalShip/merchant/releases). The .NET runtime is inside the
+executable, so the machine needs no SDK, no runtime and no checkout.
+
+| Archive                            | For                                    |
+| ---------------------------------- | -------------------------------------- |
+| `merchant-<version>-linux-x64`     | Most Linux hosts and VPSes.            |
+| `merchant-<version>-linux-arm64`   | A Raspberry Pi, or an arm64 server.    |
+| `merchant-<version>-osx-arm64`     | Apple Silicon Macs.                    |
+| `merchant-<version>-osx-x64`       | Intel Macs.                            |
+| `merchant-<version>-win-x64`       | Windows. This one is a `.zip`.         |
+
+```bash
+tar xzf merchant-<version>-linux-x64.tar.gz
+cd merchant-<version>-linux-x64
+MERCHANT_TOKEN=... ./merchant
+```
+
+Each archive holds the executable and the two example files that are the whole interface —
+`appsettings.example.jsonc` and `merchant.env.example`. On a first run merchant copies the settings
+example into its config directory and reads that copy from then on, so a fresh download already
+knows about five feeds; edit that copy and restart to change them. `./merchant --check` fetches
+every feed without a token and without touching Discord, and is the right thing to run first.
+
+`SHA256SUMS` is attached beside the archives:
+
+```bash
+sha256sum -c SHA256SUMS --ignore-missing
+```
+
+Two things the download does not carry. **Linux still needs ICU** — `libicu` on Debian or Ubuntu,
+`icu` on Arch — because merchant reads each guild's locale and [cannot run under invariant
+globalization](architecture.md#globalization-is-on-and-every-value-is-invariant). Most desktop and server images already have it. **The macOS builds are not
+signed or notarized**, being cross-built on Linux, so Gatekeeper refuses one until it is told
+otherwise: `xattr -d com.apple.quarantine ./merchant`.
+
+To run it as a service, take the unit from the systemd section below and point `ExecStart` at
+wherever the executable was unpacked.
 
 ## systemd
 

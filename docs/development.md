@@ -175,7 +175,20 @@ What it then does:
 - Runs the tests.
 - Builds the image for amd64 and arm64 and pushes it to `ghcr.io/thekrystalship/merchant`, tagged
   with the version and with `latest`.
-- Creates the GitHub release, with the CHANGELOG section as its notes.
+- Publishes one archive per platform — `linux-x64`, `linux-arm64`, `osx-x64`, `osx-arm64` and
+  `win-x64` — each a self-contained single-file build with the runtime inside it, packed with the
+  two example files, and a `SHA256SUMS` written across them.
+- Creates the GitHub release, with the CHANGELOG section as its notes and all of that attached.
+
+Everything that can refuse the release — the version check, the CHANGELOG check, the tests — runs
+first, in its own job, so a tag that should not have been pushed costs one short job rather than
+five publishes and a two-architecture image build. The release itself is created last, once the
+downloads it points at exist.
+
+Nothing in the archives is trimmed or AOT-compiled. Discord.Net finds command modules by
+reflection, so a trimmed build would lose its commands at run time rather than at build time; that
+is also what lets one Linux runner cross-publish every target, since the bundler copies a runtime
+it never has to execute.
 
 Nothing is published by pushing to `main`, and nothing needs publishing by hand.
 

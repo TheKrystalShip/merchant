@@ -3,6 +3,15 @@
 Every released version, newest first, and what changed in it. The version is `<Version>` in
 `Directory.Build.props`; `merchant --version` reports the one a running build was compiled with.
 
+## 1.1.0 — 2026-09-09
+
+### Added
+
+- Every release now carries a build for each platform, attached to it: Linux, macOS and Windows, on
+  x64 and on arm64. Each is one self-contained executable with the .NET runtime inside it, packed
+  with the example settings and env files, and a `SHA256SUMS` is attached beside them. Running
+  merchant no longer needs a checkout, an SDK or Docker.
+
 ## 1.0.0 — 2026-09-09
 
 The first release.

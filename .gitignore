@@ -5,3 +5,6 @@ artifacts/
 *.db-shm
 *.db-wal
 .env
+publish/
+stage/
+dist/

@@ -4,7 +4,7 @@
          it, the CHANGELOG has a section headed with it, and the release workflow refuses to build
          a tag that disagrees with it. Bump it in the commit that earns the bump, tag that commit
          v<version>, and pushing the tag is the release. -->
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

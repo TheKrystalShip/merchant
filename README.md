@@ -63,6 +63,15 @@ docker run -d --name merchant --restart unless-stopped \
 
 [`compose.yaml`](compose.yaml) is the same with the token in a file instead of in shell history.
 
+**As a download** (needs nothing at all — the runtime is inside the executable). Take the archive
+for the platform from [the releases page](https://github.com/TheKrystalShip/merchant/releases);
+there is one for Linux, macOS and Windows, on x64 and on arm64:
+
+```bash
+tar xzf merchant-<version>-linux-x64.tar.gz && cd merchant-<version>-linux-x64
+MERCHANT_TOKEN=... ./merchant
+```
+
 **On a host with systemd** (needs the checkout and the .NET 10 SDK):
 
 ```bash
