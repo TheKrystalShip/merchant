@@ -15,7 +15,7 @@
     <!-- Microsoft.Data.Sqlite still resolves SQLitePCLRaw 2.1.11, which carries GHSA-2m69-gcr7-jv3q.
          Pinned forward until the Sqlite package's own floor moves past it. -->
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.13" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.5" />
   </ItemGroup>
 
