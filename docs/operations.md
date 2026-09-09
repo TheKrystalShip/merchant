@@ -25,9 +25,9 @@ ok   under-10        20 items    680 ms  Games Under $10
 ```
 
 The optional argument is a country code, two letters and nothing else; anything else is refused by
-name rather than fetched. It is also the only argument merchant takes — anything else that reads
-like a command is named and refused, rather than passed to the host as configuration and answered
-by a demand for a token nobody was trying to use.
+name rather than fetched. `merchant --help` lists the three things merchant can be told and where
+its files are, and anything else that reads like a command is named and refused rather than passed
+to the host as configuration and answered by a demand for a token nobody was trying to use.
 
 In a container, where there is no `merchant` on the path:
 
@@ -115,12 +115,26 @@ knows version 2. A newer merchant wrote it: upgrade this one, or point databaseP
 different file.
 ```
 
+## Which version is running
+
+```bash
+$ merchant --version
+merchant 1.0.0+a1b2c3d4e5f6…
+```
+
+The number is the release; what follows the `+` is the commit it was built from, which a build made
+from a checkout carries and a released image does not need. It is the first question worth
+answering about a bot that is behaving oddly, and it is the same string the startup line in the
+journal opens with. Every outbound feed request carries the version too, in the user agent.
+
 ## Upgrading
 
 ```bash
-git pull && deploy/install.sh && systemctl --user restart merchant
+git pull && deploy/install.sh && systemctl --user restart merchant     # systemd
+docker compose pull && docker compose up -d                           # container
 ```
 
 Re-runnable and safe: `install.sh` seeds the token file and the settings file and overwrites
-neither, so an upgrade never touches the feeds or the ledger. See [Deployment](deployment.md) for
-the container equivalent.
+neither, and the container keeps both on its volume, so an upgrade never touches the feeds or the
+ledger. [The CHANGELOG](../CHANGELOG.md) says what is in each version, and
+[Deployment](deployment.md) has the detail of both paths.

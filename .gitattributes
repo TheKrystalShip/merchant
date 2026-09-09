@@ -1,0 +1,9 @@
+# .editorconfig says end_of_line = lf, and this is what makes that true of the checkout as well as
+# of the editor. Without it a clone on Windows arrives with CRLF, which fails
+# `dotnet format --verify-no-changes` and leaves the shell scripts unable to run under bash.
+* text=auto eol=lf
+
+*.sh text eol=lf
+*.png binary
+*.jpg binary
+*.ico binary

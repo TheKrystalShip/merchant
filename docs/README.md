@@ -23,8 +23,9 @@ Everything about merchant that is longer than a paragraph lives here. The
 
 | Document                          | For                                                                    |
 | --------------------------------- | ---------------------------------------------------------------------- |
-| [Development](development.md)     | Build, test, format, the style rules, CI, adding a source, changing the schema. |
+| [Development](development.md)     | Build, test, format, the style rules, CI, versioning and releases, adding a source, changing the schema. |
 | [Architecture](architecture.md)   | What the pieces are and which parts of the arrangement are load-bearing. |
+| [Changelog](../CHANGELOG.md)      | Every released version and what changed in it.                         |
 
 `CLAUDE.md` at the repository root is the same ground for an agent working in the tree: a short
 orientation that points back here.

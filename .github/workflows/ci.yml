@@ -22,32 +22,19 @@ jobs:
         with:
           global-json-file: global.json
 
+      # Keyed on the project files, which is what a restore reads: an unchanged dependency set
+      # reuses the packages rather than fetching them again for every job on every push.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
+          restore-keys: nuget-
+
       - name: Restore
         run: dotnet restore
 
       - name: Check formatting
         run: dotnet format --verify-no-changes --no-restore
-
-      # .editorconfig sets a line length, and it is the one rule in it no analyzer can report:
-      # Roslyn has no line-length rule and the formatter does not wrap. Checked here so the whole of
-      # the style is still the build's job rather than review's.
-      - name: Check line length
-        run: |
-          python3 - <<'CHECK'
-          import pathlib, sys
-
-          limit = 110
-          over = [f"{path}:{n} is {len(line)} characters"
-                  for path in sorted(pathlib.Path("src").rglob("*.cs"))
-                  if not {"obj", "bin"} & set(path.parts)
-                  for n, line in enumerate(path.read_text().splitlines(), 1)
-                  if len(line) > limit]
-
-          if over:
-              print(f"Longer than the {limit} characters .editorconfig allows:")
-              print(*over, sep="\n")
-              sys.exit(1)
-          CHECK
 
       - name: Build
         run: dotnet build -c Release --no-restore
@@ -65,16 +52,16 @@ jobs:
           LC_ALL: de_DE.UTF-8
         run: dotnet test -c Release --no-build
 
-  lint-shell:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # install.sh is the deploy path for anyone not using the container, and it runs on a machine
-      # nobody here can see fail. The scripts/ wrappers are checked with it: they are short, but a
-      # broken one is met by whoever has just cloned the repository.
-      - name: shellcheck
-        run: shellcheck deploy/install.sh scripts/*.sh
+      # The line length .editorconfig states, which no analyzer can report, and shellcheck over
+      # deploy/ and scripts/ — the paths somebody meets on a machine nobody here can watch fail.
+      # The same script a person runs, so there is no rule that only exists in this file.
+      - name: scripts/lint.sh
+        run: scripts/lint.sh
 
   container:
     runs-on: ubuntu-latest

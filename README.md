@@ -53,26 +53,31 @@ You need a Discord application and its bot token — <https://discord.com/develo
 **New Application** → **Bot** → **Reset Token**. Merchant requests no privileged intents, so nothing
 there needs enabling.
 
-**On a host with systemd** (needs the .NET 10 SDK to build):
+**As a container** (needs nothing but Docker — the image is published for amd64 and arm64):
 
 ```bash
+docker run -d --name merchant --restart unless-stopped \
+  -e MERCHANT_TOKEN=... -v merchant-data:/data \
+  ghcr.io/thekrystalship/merchant:latest
+```
+
+[`compose.yaml`](compose.yaml) is the same with the token in a file instead of in shell history.
+
+**On a host with systemd** (needs the checkout and the .NET 10 SDK):
+
+```bash
+git clone https://github.com/TheKrystalShip/merchant.git && cd merchant
 deploy/install.sh                            # publishes, installs the unit, links merchant onto PATH
 $EDITOR ~/.config/merchant/merchant.env      # put the token in
 systemctl --user enable --now merchant
-```
-
-**As a container** (needs nothing installed):
-
-```bash
-docker build -t merchant .
-docker run -d --name merchant -e MERCHANT_TOKEN=... -v merchant-data:/data merchant
 ```
 
 Then run `/merchant add` in the server. The whole of it, including the invite URL and what the first
 hour looks like, is in [Setting it up](docs/setup.md).
 
 When something looks wrong, `merchant --check` is the first thing to run: it validates the settings
-file and fetches every feed, needs no token, and touches no Discord.
+file and fetches every feed, needs no token, and touches no Discord. `merchant --help` lists what
+else it takes and where its files are, and `merchant --version` says which build is running.
 
 ## Documentation
 
@@ -88,6 +93,7 @@ Everything longer than a paragraph is under [`docs/`](docs/README.md).
 | [Deployment](docs/deployment.md)        | The systemd unit and the container in detail.                        |
 | [Development](docs/development.md)      | Build, test, format, style rules, CI, adding a source, schema changes. |
 | [Architecture](docs/architecture.md)    | What the pieces are and which parts are load-bearing.                |
+| [Changelog](CHANGELOG.md)               | Every released version and what changed in it.                       |
 
 ## Development
 
@@ -95,16 +101,21 @@ An ordinary .NET solution: `dotnet build`, `dotnet test`, `dotnet format`. The s
 are `.editorconfig` and are enforced by the build rather than by review, and CI runs everything a
 person can run locally.
 
-`scripts/` wraps each of those in a line, if that is less typing:
+`scripts/` holds a one-line wrapper for each, if that is less typing, plus the one rule a compiler
+cannot report:
 
 ```bash
 scripts/build.sh
 scripts/test.sh
 scripts/format.sh
+scripts/lint.sh             # the line length .editorconfig states, and shellcheck
 scripts/run.sh --check      # everything after the name goes to merchant
 ```
 
-[Development](docs/development.md) has the rest.
+Build, test, format and lint passing is the whole of what CI checks. A release is a bumped
+`<Version>`, a CHANGELOG section and a pushed `v*` tag, which builds the image and publishes the
+release on its own — [Development](docs/development.md#versioning-and-releases) has that and the
+rest.
 
 ## Licence
 

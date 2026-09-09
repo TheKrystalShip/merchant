@@ -11,7 +11,8 @@ document that explains why.
 | change the sweep, the ledger, the catalog or anything about Discord | [docs/architecture.md](docs/architecture.md) |
 | build, test, add a source kind, or change the schema | [docs/development.md](docs/development.md) |
 | touch the settings file's shape | [docs/configuration.md](docs/configuration.md), [docs/feeds.md](docs/feeds.md) |
-| touch `deploy/`, the unit or the `Dockerfile` | [docs/deployment.md](docs/deployment.md) |
+| touch `deploy/`, the unit, `compose.yaml` or the `Dockerfile` | [docs/deployment.md](docs/deployment.md) |
+| cut a release, or change what a version means | [docs/development.md](docs/development.md#versioning-and-releases) |
 | answer "why is a channel quiet" | [docs/operations.md](docs/operations.md) |
 
 ## What this is
@@ -30,6 +31,7 @@ messages and the command replies are the entire interface, and each has to expla
 ```
 src/Merchant/
   Program.cs           composition root; where a new ISourceFactory is registered
+  Build.cs             what this build calls itself: --version, and the user agent
   MerchantConfig.cs    where the settings file and the ledger are found
   BotOptions.cs        the bot section, and the check that the file has no unknown keys
   Feeds/               Schema.cs (the settings vocabulary), FeedCatalog, SourceRegistry, Factories/
@@ -37,8 +39,10 @@ src/Merchant/
   Discord/             Sweeper, Announcer, MerchantModule, FeedAutocomplete, GatewayFailure
   Storage/Ledger.cs    SQLite, and the migration list
 tests/Merchant.Tests/  xUnit; captured feed documents under Fixtures/
-deploy/                install.sh, merchant.service, appsettings.example.jsonc, merchant.env.example
-scripts/               one-line wrappers over dotnet build / test / format / run
+deploy/                install.sh, uninstall.sh, merchant.service, the example settings and env files
+scripts/               one-line wrappers over dotnet build / test / format / run, and lint.sh
+compose.yaml           the container deploy people actually use, published image and all
+CHANGELOG.md           every released version and what changed in it
 docs/                  the manuals
 ```
 
@@ -48,14 +52,17 @@ docs/                  the manuals
 dotnet build                                      # analyzers and style rules run here, as errors
 dotnet test                                       # no network: the feeds in them are captured files
 dotnet format                                     # the style in .editorconfig, applied
+scripts/lint.sh                                   # the line length, and shellcheck
 dotnet run --project src/Merchant -- --check      # validate the settings file, fetch every feed
 ```
 
-`scripts/build.sh`, `test.sh`, `format.sh` and `run.sh` are one-line wrappers over exactly those,
-taking the same arguments. Nothing lives only inside one, so use whichever is shorter to type.
+`scripts/build.sh`, `test.sh`, `format.sh` and `run.sh` are one-line wrappers over exactly those
+`dotnet` commands, taking the same arguments. Nothing lives only inside one, so use whichever is
+shorter to type. `scripts/lint.sh` is not a wrapper — it is the line length `.editorconfig` states,
+which no analyzer reports, and `shellcheck` — and CI runs that file rather than a copy of it.
 
-Nothing is bespoke: an ordinary .NET solution, and CI runs what a person runs locally, plus a
-line-length check, `shellcheck`, `docker build`, and the tests again under `de_DE.UTF-8`.
+Nothing is bespoke: an ordinary .NET solution, and CI runs what a person runs locally, plus
+`docker build` and the tests again under `de_DE.UTF-8`.
 
 Set `MERCHANT_DEV_GUILD` when running against a real server: guild commands register instantly,
 global ones take up to an hour.
@@ -95,6 +102,9 @@ Each is load-bearing and each is explained in
   left out.
 - **Every command reply is ephemeral**, and `/merchant add` checks channel permissions before it
   writes.
+- **The version is `<Version>` in `Directory.Build.props` and nowhere else.** A release is that
+  number bumped, a `CHANGELOG` section headed with it, and a pushed `v<version>` tag; the release
+  workflow refuses a tag that disagrees with either.
 
 ## Tests
 

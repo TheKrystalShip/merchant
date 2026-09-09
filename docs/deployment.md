@@ -11,7 +11,11 @@ resolver error.
 
 ## systemd
 
+Needs the checkout and the .NET SDK; the install it leaves behind needs only the runtime.
+
 ```bash
+git clone https://github.com/TheKrystalShip/merchant.git
+cd merchant
 deploy/install.sh
 $EDITOR ~/.config/merchant/merchant.env      # put the token in
 systemctl --user enable --now merchant
@@ -57,20 +61,50 @@ git pull && deploy/install.sh && systemctl --user restart merchant
 ```
 
 The schema comes up on its own, the settings file and the ledger are untouched, and there is no
-step to remember.
+step to remember. `merchant --version` says which build is installed.
+
+### Removing it
+
+```bash
+deploy/uninstall.sh            # stops the unit, removes the install, the symlink and the unit file
+deploy/uninstall.sh --purge    # and the token, the settings file and the ledger
+```
+
+Without `--purge` the token, the settings file and the ledger stay where they are, so re-installing
+lands on the same subscriptions. With it, the subscriptions go with the ledger.
 
 ## Container
 
+The image is published for amd64 and arm64, so a host needs nothing but Docker:
+
 ```bash
-docker build -t merchant .
 docker run -d --name merchant \
+  --restart unless-stopped \
   -e MERCHANT_TOKEN=... \
   -v merchant-data:/data \
-  merchant
+  ghcr.io/thekrystalship/merchant:latest
 ```
 
-The image needs nothing installed on the host: it builds and runs inside. It runs unprivileged as
-uid 10001, and `/data` is the volume holding both state and configuration:
+`--restart unless-stopped` is not optional in practice: without it the bot is up until the first
+reboot of the host and then quietly is not.
+
+[`compose.yaml`](../compose.yaml) is the same thing with the token in a file rather than in shell
+history, and it is the whole of what a host needs — the image is published, so nothing is cloned:
+
+```bash
+curl -O https://raw.githubusercontent.com/TheKrystalShip/merchant/main/compose.yaml
+printf 'MERCHANT_TOKEN=%s\n' "the-bot-token" > merchant.env && chmod 600 merchant.env
+docker compose up -d
+```
+
+Pin a version rather than `latest` on anything worth keeping steady:
+`ghcr.io/thekrystalship/merchant:1.0.0`. The tags are the released versions, and
+[the CHANGELOG](../CHANGELOG.md) says what is in each.
+
+To run the checkout instead — a change being tested, or a fork — `docker build -t merchant .`
+builds the same image locally, and `compose.yaml` carries the `build:` line to uncomment.
+
+It runs unprivileged as uid 10001, and `/data` is the volume holding both state and configuration:
 
 - `MERCHANT_DB=/data/merchant.db` — the ledger. Mount this to keep it across upgrades.
 - `MERCHANT_CONFIG=/data/appsettings.json` — the catalog. Nothing is baked into the image: on a
@@ -79,8 +113,13 @@ uid 10001, and `/data` is the volume holding both state and configuration:
 
 **No token is ever baked in.** Pass it at run time.
 
-Upgrading is `docker build` and a replaced container; the volume carries the feeds and the ledger
-across, and the schema comes up on its own.
+Upgrading:
+
+```bash
+docker compose pull && docker compose up -d      # or: docker pull … && docker rm -f merchant && …
+```
+
+The volume carries the feeds and the ledger across, and the schema comes up on its own.
 
 ```bash
 docker exec merchant dotnet /app/merchant.dll --check

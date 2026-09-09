@@ -28,25 +28,29 @@ channels it should post in — `/merchant add` checks them and will tell you wha
 Two supported ways, and they install the same build. Pick one; the [deployment
 guide](deployment.md) has the detail behind both.
 
-**On a host with systemd** — needs the .NET SDK to build. `dotnet --version` should report 10.0.100
-or newer; the exact floor is in `global.json`, and an older SDK says so rather than failing
+**As a container** — needs nothing but Docker, because the image is published:
+
+```bash
+docker run -d --name merchant \
+  --restart unless-stopped \
+  -e MERCHANT_TOKEN=... \
+  -v merchant-data:/data \
+  ghcr.io/thekrystalship/merchant:latest
+```
+
+[`compose.yaml`](../compose.yaml) does the same with the token in a file rather than in shell
+history, and is one `curl` away from a host with nothing on it.
+
+**On a host with systemd** — needs the checkout and the .NET SDK. `dotnet --version` should report
+10.0.100 or newer; the exact floor is in `global.json`, and an older SDK says so rather than failing
 obscurely.
 
 ```bash
+git clone https://github.com/TheKrystalShip/merchant.git && cd merchant
 deploy/install.sh                            # publishes, installs the unit, links merchant onto PATH
 $EDITOR ~/.config/merchant/merchant.env      # put the token in
 systemctl --user enable --now merchant
 journalctl --user -u merchant -f
-```
-
-**As a container** — needs nothing installed, because it builds and runs inside the image.
-
-```bash
-docker build -t merchant .
-docker run -d --name merchant \
-  -e MERCHANT_TOKEN=... \
-  -v merchant-data:/data \
-  merchant
 ```
 
 Either way the token is passed in the environment and never written into the settings file. See
@@ -81,4 +85,5 @@ instantly ([Development](development.md#running-against-a-real-server)).
 ## If it does not work
 
 Run `merchant --check` first — it validates the settings file and fetches every feed, needs no
-token, and touches no Discord. [Operations](operations.md) has the rest of the ladder.
+token, and touches no Discord. `merchant --help` lists what else it takes and where it keeps its
+files. [Operations](operations.md) has the rest of the ladder.
