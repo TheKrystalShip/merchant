@@ -24,7 +24,7 @@ jobs:
 
       # Keyed on the project files, which is what a restore reads: an unchanged dependency set
       # reuses the packages rather than fetching them again for every job on every push.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
