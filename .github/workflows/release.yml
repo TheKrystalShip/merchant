@@ -74,7 +74,7 @@ jobs:
 
       # arm64 as well as amd64: a Discord bot that posts a few embeds an hour is exactly what ends
       # up on a Raspberry Pi, and cross-building the SDK image on the Pi itself is punishing.
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
