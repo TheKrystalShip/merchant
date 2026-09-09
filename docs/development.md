@@ -177,7 +177,7 @@ What it then does:
   with the version and with `latest`.
 - Publishes one archive per platform — `linux-x64`, `linux-arm64`, `osx-x64`, `osx-arm64` and
   `win-x64` — each a self-contained single-file build with the runtime inside it, packed with the
-  two example files, and a `SHA256SUMS` written across them.
+  two example files and, on the Linux ones, the unit; and a `SHA256SUMS` written across them.
 - Creates the GitHub release, with the CHANGELOG section as its notes and all of that attached.
 
 Everything that can refuse the release — the version check, the CHANGELOG check, the tests — runs

@@ -24,9 +24,9 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       image: ${{ steps.version.outputs.image }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
@@ -69,7 +69,7 @@ jobs:
       - name: Test
         run: dotnet test -c Release
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: notes
           path: notes.md
@@ -94,9 +94,9 @@ jobs:
             exe: .exe
             zip: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
@@ -148,7 +148,7 @@ jobs:
             tar czf "dist/${name}.tar.gz" -C stage "$name"
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: archive-${{ matrix.rid }}
           path: dist/*
@@ -163,12 +163,12 @@ jobs:
       DOCKER_BUILD_RECORD_UPLOAD: false
       DOCKER_BUILD_SUMMARY: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -176,7 +176,7 @@ jobs:
 
       # arm64 as well as amd64: a Discord bot that posts a few embeds an hour is exactly what ends
       # up on a Raspberry Pi, and cross-building the SDK image on the Pi itself is punishing.
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -195,13 +195,13 @@ jobs:
     steps:
       # Named rather than "everything this run produced": an action is free to upload artifacts of
       # its own, and a release job that collects whatever it finds fails on the first one that does.
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: archive-*
           merge-multiple: true
           path: dist
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: notes
           path: notes

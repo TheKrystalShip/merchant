@@ -16,15 +16,15 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
       # Keyed on the project files, which is what a restore reads: an unchanged dependency set
       # reuses the packages rather than fetching them again for every job on every push.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
@@ -55,7 +55,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The line length .editorconfig states, which no analyzer can report, and shellcheck over
       # deploy/ and scripts/ — the paths somebody meets on a machine nobody here can watch fail.
@@ -66,7 +66,7 @@ jobs:
   container:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The image is how somebody runs merchant without a .NET SDK, so a Dockerfile that no longer
       # builds is a broken deploy path even when every test passes.
